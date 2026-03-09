@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\audio\audio.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\animation.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\ball_gfx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\billboard.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\blue_field.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\collision.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\diglett_bonus.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\draw_blue_field.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\draw_red_field.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\flippers.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\game_state.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\gengar_bonus.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\joypad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\main_loop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\meowth_bonus.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\mewtwo_bonus.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\physics_math.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\pinball.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\red_field.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\rng.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\save.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\score.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\seel_bonus.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\tilt.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\timer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\platform\platform.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\renderer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\stage_assets.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\stage_palettes.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\tile_loader.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\vram.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\vwf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\third_party\stb_image_impl.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game.rc">
+      <Filter>Source Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{B3C598B1-5680-352B-94AF-5914BE1C5351}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

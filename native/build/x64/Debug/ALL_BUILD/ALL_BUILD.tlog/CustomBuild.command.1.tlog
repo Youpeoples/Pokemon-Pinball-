@@ -1,0 +1,10 @@
+^C:\USERS\VILLE\DOCUMENTS\GITHUB\COMP PROJ\NATIVE\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/ville/Documents/GitHub/Comp Proj/native" "-BC:/Users/ville/Documents/GitHub/Comp Proj/native/build" --check-stamp-file "C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
