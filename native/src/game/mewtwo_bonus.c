@@ -15,6 +15,7 @@
  */
 
 #include "game/mewtwo_bonus.h"
+#include "game/config_data.h"
 #include "game/sprite_data.h"
 #include "game/animation.h"
 #include "game/timer.h"
@@ -32,9 +33,7 @@
 /*=============================================================================
  * Constants
  *===========================================================================*/
-/* 4-byte BCD scores (little-endian) */
-static const uint8_t FIVE_MILLION_SCORE[4]          = {0x00, 0x00, 0x00, 0x50};  /* 5,000,000 */
-static const uint8_t ONE_HUNDRED_THOUSAND_SCORE[4]  = {0x00, 0x00, 0x10, 0x00};  /* 100,000 */
+/* Score values loaded from config/scores.json */
 
 /*=============================================================================
  * Orbiting Ball Physics Data — loaded from ball_physics_e4000.bin
@@ -505,7 +504,7 @@ void init_mewtwo_bonus(GameState *state) {
 
     /* Play Mewtwo stage music (bank 0x12, MUSIC_MEWTWO_STAGE)
      * Verified: song_banks[17] = { 0x12, 0x01 } matches Bank(Music_MewtwoStage). */
-    audio_play_music(state->audio, 0x12, 0x01);
+    PLAY_MUSIC(state, "mewtwo_stage", 0x12, 0x01);
 }
 
 /*=============================================================================
@@ -567,7 +566,7 @@ void handle_ball_loss_mewtwo_bonus(GameState *state) {
     }
 
     /* Ball loss SFX */
-    audio_play_sfx(state->audio, 0x00, 0x0B);
+    PLAY_SFX(state, "cave_light", 0x00, 0x0B);
 }
 
 /*=============================================================================
@@ -702,7 +701,7 @@ static void mewtwo_anim_hit_done(GameState *state) {
 static void mewtwo_anim_defeated_done(GameState *state) {
     /* Func_19638: ASM checks animation INDEX (dec de from state var) */
     if (state->mewtwo_anim.index == 1) {
-        audio_play_sfx(state->audio, 0x00, 0x40);
+        PLAY_SFX(state, "mewtwo_orb_hit", 0x00, 0x40);
     } else if (state->mewtwo_anim.index == 0x20) {
         /* Stage cleared! */
         state->mewtwo_bonus_completed = 1;
@@ -717,7 +716,7 @@ static void mewtwo_anim_defeated_done(GameState *state) {
         /* scrolling_text_normal 0, 20, 0, 21 → { 5, 0x54, 0x40, 20, 0, 61 } */
         uint8_t header[6] = { 5, 0x54, 0x40, 20, 0, 61 };
         load_scrolling_text(state, 2, header, text);
-        audio_play_sfx(state->audio, 0x4B, 0x2A);
+        PLAY_SFX(state, "bonus_stage_clear", 0x4B, 0x2A);
     }
 }
 
@@ -759,7 +758,7 @@ static void resolve_mewtwo_hit(GameState *state) {
         goto after_hit;
 
     /* Award 5,000,000 points */
-    add_score_with_multiplier(state, FIVE_MILLION_SCORE);
+    add_score_with_multiplier(state, state->config->scores.mewtwo_hit);
 
     /* Increment hit counter within group (ASM: Func_19531 at 0x19531) */
     state->mewtwo_hit_counter++;
@@ -778,11 +777,11 @@ static void resolve_mewtwo_hit(GameState *state) {
         state->flippers_disabled = 1;
         load_flippers_palette(state);
         stop_timer(state);
-        audio_play_music(state->audio, 0x00, 0x00); /* stop music */
+        PLAY_MUSIC(state, "nothing", 0x00, 0x00); /* stop music */
     } else {
         /* Not yet defeated — hit animation + SFX (every hit) */
         set_mewtwo_animation(state, 2); /* hit */
-        audio_play_sfx(state->audio, 0x00, 0x39);
+        PLAY_SFX(state, "mewtwo_hit", 0x00, 0x39);
     }
 
 after_hit:
@@ -819,8 +818,8 @@ static void update_orbiting_balls(GameState *state) {
                 if (ball->animation_group == 0) {
                     /* Start shrinking animation */
                     set_orb_animation(ball, 2);
-                    add_score_with_multiplier(state, ONE_HUNDRED_THOUSAND_SCORE);
-                    audio_play_sfx(state->audio, 0x00, 0x38);
+                    add_score_with_multiplier(state, state->config->scores.mewtwo_orb_hit);
+                    PLAY_SFX(state, "mewtwo_orbit", 0x00, 0x38);
                 }
             }
         }
@@ -865,11 +864,11 @@ static void play_low_time_sfx(GameState *state) {
     if (state->timer_frames != 0) return;
     if (state->timer_minutes != 0) return;
     if (state->timer_seconds == 32) {
-        audio_play_sfx(state->audio, 0x07, 0x49);
+        PLAY_SFX(state, "countdown_32sec", 0x07, 0x49);
     } else if (state->timer_seconds == 16) {
-        audio_play_sfx(state->audio, 0x0A, 0x4A);
+        PLAY_SFX(state, "countdown_16sec", 0x0A, 0x4A);
     } else if (state->timer_seconds == 5) {
-        audio_play_sfx(state->audio, 0x0D, 0x4B);
+        PLAY_SFX(state, "countdown_5sec", 0x0D, 0x4B);
     }
 }
 

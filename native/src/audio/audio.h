@@ -36,16 +36,45 @@ void audio_stop_all(AudioEngine *audio);
 /* Set master volume (0-7 for each channel) */
 void audio_set_volume(AudioEngine *audio, uint8_t left, uint8_t right);
 
-/* Load Pikachu PCM sound clips from WAV files.
- * The original uses raw GBC wave channel PCM streaming (PlayPikachuSoundClip
- * at bank 0x50) which can't be reproduced through the bytecode SFX system.
- * This is the best we can do: play the WAV files mixed into the audio output. */
-void audio_init_pcm(AudioEngine *audio, const char *base_path);
+/* Set configurable volume scales (0.0 = silent, 1.0 = full, >1.0 = amplified) */
+void audio_set_volume_scale(AudioEngine *audio, float master);
+void audio_set_music_volume_scale(AudioEngine *audio, float scale);
+void audio_set_sfx_volume_scale(AudioEngine *audio, float scale);
+
+/* Load Pikachu PCM sound clips from WAV/OGG files.
+ * clip_paths[0] and clip_paths[1] override the default filenames when non-NULL
+ * and non-empty. Pass NULL to use defaults for both clips. */
+void audio_init_pcm(AudioEngine *audio, const char *base_path,
+                    const char *clip_paths[2]);
 
 /* Play a Pikachu PCM clip (0 = "pi-ka-chu", 1 = "piiiiikaaaa" thundershock) */
 void audio_play_pcm(AudioEngine *audio, int clip_index);
 
 /* Free PCM sound clip buffers */
 void audio_cleanup_pcm(AudioEngine *audio);
+
+/* --- Custom WAV/OGG audio file support --- */
+
+/* Load a single WAV or OGG file to S16 stereo 44100Hz PCM.
+ * Returns clip index (>=0) on success, or -1 on failure. */
+int audio_load_custom_clip(AudioEngine *audio, const char *file_path);
+
+/* Load all custom clips referenced in config audio entries.
+ * Called after config_load_all() to resolve file paths. */
+struct ConfigData;
+void audio_load_custom_clips(AudioEngine *audio, struct ConfigData *config,
+                             const char *base_path);
+
+/* Play a custom clip as music (looping, silences bytecode music) */
+void audio_play_custom_music(AudioEngine *audio, int clip_index);
+
+/* Play a custom clip as SFX (one-shot, mixed over current audio) */
+void audio_play_custom_sfx(AudioEngine *audio, int clip_index);
+
+/* Stop custom music playback (resumes bytecode music on next play) */
+void audio_stop_custom_music(AudioEngine *audio);
+
+/* Free all custom clip buffers */
+void audio_cleanup_custom(AudioEngine *audio);
 
 #endif /* AUDIO_H */

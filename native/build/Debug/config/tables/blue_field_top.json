@@ -1,0 +1,84 @@
+{
+    "_comment": "Blue Field Top Half - object collision groups for stage 0x4",
+    "groups": [
+        {
+            "name": "shellder",
+            "_comment": "3 Shellder bumpers, attribute-gated to collision tiles 0x5E-0x6F plus 0x98-0x99",
+            "x_thresh": 14,
+            "y_thresh": 14,
+            "attribute_gated": true,
+            "section": "all",
+            "collision_attrs": [94, 95, 96, 97, 98, 99, 100, 101, 152, 102, 103, 104, 105, 106, 107, 153, 108, 109, 110, 111, 255],
+            "objects": [
+                {"id": 3, "x": 58, "y": 86},
+                {"id": 4, "x": 79, "y": 69},
+                {"id": 5, "x": 100, "y": 86}
+            ]
+        },
+        {
+            "name": "spinner",
+            "_comment": "Single spinner object on the right side of the field",
+            "x_thresh": 8,
+            "y_thresh": 4,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 6, "x": 146, "y": 106}
+            ]
+        },
+        {
+            "name": "board_triggers",
+            "_comment": "4 board trigger zones on the blue field top half",
+            "x_thresh": 9,
+            "y_thresh": 9,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 7, "x": 21, "y": 67},
+                {"id": 8, "x": 139, "y": 67},
+                {"id": 9, "x": 16, "y": 140},
+                {"id": 10, "x": 143, "y": 140}
+            ]
+        },
+        {
+            "name": "slowpoke",
+            "_comment": "Slowpoke trigger on the left side of the field",
+            "x_thresh": 6,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 12, "x": 44, "y": 120}
+            ]
+        },
+        {
+            "name": "cloyster",
+            "_comment": "Cloyster trigger on the right side of the field",
+            "x_thresh": 6,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 11, "x": 115, "y": 120}
+            ]
+        },
+        {
+            "name": "upgrade_triggers",
+            "_comment": "3 ball upgrade trigger zones (GET lights) in the center of the field",
+            "x_thresh": 6,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 19, "x": 55, "y": 52},
+                {"id": 20, "x": 79, "y": 47},
+                {"id": 21, "x": 103, "y": 53}
+            ]
+        }
+    ]
+}

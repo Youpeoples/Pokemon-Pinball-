@@ -1,0 +1,100 @@
+{
+    "_comment": "Red Field Top Half - object collision groups for stage 0x0",
+    "groups": [
+        {
+            "name": "voltorb",
+            "_comment": "3 Voltorb bumpers, attribute-gated to collision tiles 0xE0-0xF5",
+            "x_thresh": 14,
+            "y_thresh": 14,
+            "attribute_gated": true,
+            "section": "all",
+            "collision_attrs": [224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 255],
+            "objects": [
+                {"id": 3, "x": 66, "y": 102},
+                {"id": 4, "x": 90, "y": 92},
+                {"id": 5, "x": 85, "y": 120}
+            ]
+        },
+        {
+            "name": "spinner",
+            "_comment": "Single spinner object on the right side of the field",
+            "x_thresh": 8,
+            "y_thresh": 4,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 9, "x": 144, "y": 108}
+            ]
+        },
+        {
+            "name": "board_triggers",
+            "_comment": "8 board trigger zones scattered across the top field",
+            "x_thresh": 9,
+            "y_thresh": 9,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 17, "x": 28, "y": 60},
+                {"id": 18, "x": 42, "y": 68},
+                {"id": 19, "x": 37, "y": 99},
+                {"id": 20, "x": 18, "y": 122},
+                {"id": 21, "x": 38, "y": 132},
+                {"id": 22, "x": 124, "y": 68},
+                {"id": 23, "x": 142, "y": 122},
+                {"id": 24, "x": 127, "y": 57}
+            ]
+        },
+        {
+            "name": "top_staryu",
+            "_comment": "Staryu trigger at bottom of top field, attribute-gated to tiles 0x10-0x12",
+            "x_thresh": 8,
+            "y_thresh": 6,
+            "attribute_gated": true,
+            "section": "all",
+            "collision_attrs": [16, 17, 18, 255],
+            "objects": [
+                {"id": 25, "x": 64, "y": 144}
+            ]
+        },
+        {
+            "name": "bellsprout",
+            "_comment": "Bellsprout object on the right side of the field",
+            "x_thresh": 6,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 27, "x": 123, "y": 118}
+            ]
+        },
+        {
+            "name": "ditto_slot",
+            "_comment": "Ditto/slot trigger in the upper-left corner",
+            "x_thresh": 3,
+            "y_thresh": 3,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 31, "x": 18, "y": 36}
+            ]
+        },
+        {
+            "name": "upgrade_triggers",
+            "_comment": "3 ball upgrade trigger zones (GET lights) in the center of the field",
+            "x_thresh": 6,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "all",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 14, "x": 58, "y": 83},
+                {"id": 15, "x": 80, "y": 72},
+                {"id": 16, "x": 102, "y": 73}
+            ]
+        }
+    ]
+}

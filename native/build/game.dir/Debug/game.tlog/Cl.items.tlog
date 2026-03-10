@@ -1,34 +1,37 @@
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\audio\audio.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\audio.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\animation.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\animation.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\ball_gfx.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\ball_gfx.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\billboard.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\billboard.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\blue_field.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\blue_field.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\collision.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\collision.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\diglett_bonus.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\diglett_bonus.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\draw_blue_field.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\draw_blue_field.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\draw_red_field.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\draw_red_field.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\flippers.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\flippers.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\game_state.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\game_state.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\gengar_bonus.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\gengar_bonus.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\joypad.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\joypad.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\main_loop.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\main_loop.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\meowth_bonus.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\meowth_bonus.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\mewtwo_bonus.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\mewtwo_bonus.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\physics_math.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\physics_math.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\pinball.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\pinball.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\red_field.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\red_field.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\rng.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\rng.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\save.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\save.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\score.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\score.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\seel_bonus.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\seel_bonus.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\tilt.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\tilt.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\game\timer.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\timer.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\main.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\main.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\platform\platform.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\platform.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\renderer.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\renderer.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\stage_assets.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\stage_assets.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\stage_palettes.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\stage_palettes.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\tile_loader.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\tile_loader.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\vram.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\vram.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\renderer\vwf.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\vwf.obj
-C:\Users\ville\Documents\GitHub\Comp Proj\native\src\third_party\stb_image_impl.c;C:\Users\ville\Documents\GitHub\Comp Proj\native\build\game.dir\Debug\stb_image_impl.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\audio\audio.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\audio.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\animation.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\animation.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\ball_gfx.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\ball_gfx.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\billboard.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\billboard.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\blue_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\blue_field.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\collision.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\collision.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\config_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\config_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\diglett_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\diglett_bonus.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_blue_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_blue_field.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_red_field.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\flippers.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\game_state.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\game_state.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\gengar_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\gengar_bonus.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\joypad.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\joypad.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\main_loop.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\main_loop.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\meowth_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\meowth_bonus.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\mewtwo_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\mewtwo_bonus.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\physics_math.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\physics_math.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\pinball.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\pinball.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\red_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\red_field.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\rng.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\rng.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\save.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\save.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\score.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\score.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\seel_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\seel_bonus.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\tilt.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\tilt.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\timer.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\timer.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\main.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\main.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\platform\platform.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\platform.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\renderer.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\renderer.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\stage_assets.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stage_assets.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\stage_palettes.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stage_palettes.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\tile_loader.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\tile_loader.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\vram.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\vram.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\vwf.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\vwf.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\cJSON.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\cJSON.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_impl.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stb_image_impl.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_vorbis.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stb_vorbis.obj

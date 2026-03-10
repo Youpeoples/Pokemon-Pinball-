@@ -9,6 +9,7 @@
 #include "renderer/tile_loader.h"
 #include "renderer/stage_palettes.h"
 #include "game/game_state.h"
+#include "game/config_data.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -729,9 +730,11 @@ bool load_stage_assets(uint8_t stage_id, VirtualVRAM *vram,
         /* Check for sentinel: both ASSET_TILES/ASSET_TILEMAP need a filename,
          * ASSET_PALETTES has NULL filename. A sentinel has size=0 and type=0. */
         if (entry->type == ASSET_PALETTES && entry->size > 0) {
-            /* Load palette data from hardcoded arrays */
-            const uint16_t *bg_pals = get_stage_bg_palettes(stage_id);
-            const uint16_t *obj_pals = get_stage_obj_palettes(stage_id);
+            /* Try config palettes first, fall back to hardcoded arrays */
+            const uint16_t *bg_pals = config_get_stage_bg_palettes(state->config, stage_id);
+            const uint16_t *obj_pals = config_get_stage_obj_palettes(state->config, stage_id);
+            if (!bg_pals) bg_pals = get_stage_bg_palettes(stage_id);
+            if (!obj_pals) obj_pals = get_stage_obj_palettes(stage_id);
             for (int i = 0; i < 8; i++) {
                 for (int c = 0; c < 4; c++) {
                     state->bg_palettes[i].colors[c] = bg_pals[i * 4 + c];
@@ -824,8 +827,11 @@ bool load_screen_assets(uint8_t screen_id, VirtualVRAM *vram,
 
     for (const StageAssetEntry *entry = table; ; entry++) {
         if (entry->type == ASSET_PALETTES && entry->size > 0) {
-            const uint16_t *bg_pals = get_screen_bg_palettes(screen_id);
-            const uint16_t *obj_pals = get_screen_obj_palettes(screen_id);
+            /* Try config palettes first, fall back to hardcoded arrays */
+            const uint16_t *bg_pals = config_get_screen_bg_palettes(state->config, screen_id);
+            const uint16_t *obj_pals = config_get_screen_obj_palettes(state->config, screen_id);
+            if (!bg_pals) bg_pals = get_screen_bg_palettes(screen_id);
+            if (!obj_pals) obj_pals = get_screen_obj_palettes(screen_id);
             for (int i = 0; i < 8; i++) {
                 for (int c = 0; c < 4; c++) {
                     state->bg_palettes[i].colors[c] = bg_pals[i * 4 + c];

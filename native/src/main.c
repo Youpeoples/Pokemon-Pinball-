@@ -17,6 +17,7 @@
 #include "renderer/vram.h"
 #include "audio/audio.h"
 #include "game/game_state.h"
+#include "game/config_data.h"
 #include "game/main_loop.h"
 #include "game/joypad.h"
 #include "game/save.h"
@@ -58,20 +59,7 @@ int main(int argc, char *argv[]) {
     /* Initialize audio engine */
     AudioEngine *audio = audio_init(platform);
 
-    /* Load Pikachu PCM sound clips.
-     * This is the best we can do — the original uses raw GBC wave channel PCM
-     * streaming (PlayPikachuSoundClip at bank 0x50, writes directly to NR30-NR34
-     * and wave RAM FF30-FF3F) which can't be reproduced through the bytecode
-     * SFX system. We load the WAV files and mix them into the audio output. */
-    {
-        char *sdl_base = SDL_GetBasePath();
-        if (sdl_base && audio) {
-            char pcm_base[512];
-            snprintf(pcm_base, sizeof(pcm_base), "%s..\\..\\..\\", sdl_base);
-            audio_init_pcm(audio, pcm_base);
-            SDL_free(sdl_base);
-        }
-    }
+    /* Pikachu PCM clips are loaded later, after config and asset path are set up */
 
     /* Initialize game state (equivalent to clearing WRAM + HRAM) */
     GameState *state = game_state_init();
@@ -145,6 +133,25 @@ int main(int argc, char *argv[]) {
         }
         printf("Asset base path: %s\n", state->asset_base_path);
     }
+
+    /* Load external JSON configs (physics, scores, tables, pokemon).
+     * Missing files gracefully fall back to hardcoded defaults. */
+    config_load_all(state->config, state->asset_base_path);
+
+    /* Apply audio volume settings from config */
+    config_apply_audio_volume(state->config, state->audio);
+
+    /* Load Pikachu PCM sound clips (configurable paths via audio.json) */
+    {
+        const char *pika_paths[2] = {
+            state->config->audio_config.pikachu_clip_0,
+            state->config->audio_config.pikachu_clip_1
+        };
+        audio_init_pcm(state->audio, state->asset_base_path, pika_paths);
+    }
+
+    /* Load custom WAV/OGG audio clips referenced in audio.json */
+    audio_load_custom_clips(state->audio, state->config, state->asset_base_path);
 
     /* Save data is loaded during copyright screen exit (FadeOutCopyrightScreenAndLoadData),
      * matching ASM lifecycle ordering. See handle_copyright_screen state 2. */

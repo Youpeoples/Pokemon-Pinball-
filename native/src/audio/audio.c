@@ -13,11 +13,17 @@
 
 #include "audio/audio.h"
 #include "audio/audio_data.h"
+#include "game/config_data.h"
 #include <SDL.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+
+/* stb_vorbis for OGG decoding — header-only include here;
+ * the full implementation compiles from stb_vorbis.c via GLOB_RECURSE */
+#define STB_VORBIS_HEADER_ONLY
+#include "stb_vorbis.c"
 
 /* --- GBC APU constants --- */
 #define SAMPLE_RATE      44100
@@ -203,6 +209,24 @@ struct AudioEngine {
     uint32_t pcm_lengths[2];    /* length in stereo sample pairs */
     uint32_t pcm_position;      /* current playback position */
     int      pcm_active_clip;   /* -1 = none, 0 or 1 = playing */
+
+    /* Configurable volume scales (0.0 - 1.0, default 1.0) */
+    float master_volume_scale;
+    float music_volume_scale;
+    float sfx_volume_scale;
+
+    /* Custom WAV/OGG audio clips */
+    #define CUSTOM_CLIP_MAX 128
+    struct {
+        int16_t *buffer;     /* S16 stereo 44100 Hz PCM data */
+        uint32_t length;     /* Length in stereo sample pairs */
+        bool loaded;
+    } custom_clips[CUSTOM_CLIP_MAX];
+    int num_custom_clips;
+    int custom_music_clip;       /* -1 = none */
+    uint32_t custom_music_pos;
+    int custom_sfx_clip;         /* -1 = none */
+    uint32_t custom_sfx_pos;
 };
 
 /* --- Forward declarations --- */
@@ -215,6 +239,7 @@ static void channel_process_effects(AudioEngine *e, uint8_t *ch);
 static void channel_output_registers(AudioEngine *e, uint8_t *ch);
 static void synthesize_frame(AudioEngine *e);
 static void apply_registers_to_apu(AudioEngine *e);
+static bool has_extension(const char *path, const char *ext);
 
 /* --- Square wave duty cycle tables --- */
 /* GBC duty cycles: 12.5%, 25%, 50%, 75% */
@@ -280,6 +305,12 @@ AudioEngine *audio_init(Platform *platform) {
     e->platform = platform;
     e->enabled = true;
     e->pcm_active_clip = -1;
+    e->master_volume_scale = 1.0f;
+    e->music_volume_scale = 1.0f;
+    e->sfx_volume_scale = 1.0f;
+    e->num_custom_clips = 0;
+    e->custom_music_clip = -1;
+    e->custom_sfx_clip = -1;
     engine_init(e);
     return e;
 }
@@ -287,6 +318,7 @@ AudioEngine *audio_init(Platform *platform) {
 void audio_shutdown(AudioEngine *e) {
     if (e) {
         audio_cleanup_pcm(e);
+        audio_cleanup_custom(e);
         free(e);
     }
 }
@@ -552,6 +584,24 @@ void audio_stop_all(AudioEngine *e) {
 void audio_set_volume(AudioEngine *e, uint8_t left, uint8_t right) {
     if (!e) return;
     e->master_volume = ((left & 0x7) << 4) | (right & 0x7);
+}
+
+void audio_set_volume_scale(AudioEngine *e, float master) {
+    if (!e) return;
+    if (master < 0.0f) master = 0.0f;
+    e->master_volume_scale = master;
+}
+
+void audio_set_music_volume_scale(AudioEngine *e, float scale) {
+    if (!e) return;
+    if (scale < 0.0f) scale = 0.0f;
+    e->music_volume_scale = scale;
+}
+
+void audio_set_sfx_volume_scale(AudioEngine *e, float scale) {
+    if (!e) return;
+    if (scale < 0.0f) scale = 0.0f;
+    e->sfx_volume_scale = scale;
 }
 
 /* --- Engine internals --- */
@@ -1584,6 +1634,10 @@ static void synthesize_frame(AudioEngine *e) {
         e->dc_prev_in_r = right_raw;
         e->dc_prev_out_r = out_r;
 
+        /* Apply configurable master volume scale */
+        out_l *= (double)e->master_volume_scale;
+        out_r *= (double)e->master_volume_scale;
+
         /* Clamp to S16 range */
         if (out_l > 32767.0) out_l = 32767.0;
         if (out_l < -32768.0) out_l = -32768.0;
@@ -1592,6 +1646,50 @@ static void synthesize_frame(AudioEngine *e) {
 
         e->output_buffer[s * 2] = (int16_t)out_l;
         e->output_buffer[s * 2 + 1] = (int16_t)out_r;
+    }
+
+    /* Mix custom music (looping), scaled by music_volume_scale */
+    if (e->custom_music_clip >= 0 && e->custom_music_clip < e->num_custom_clips) {
+        int16_t *buf = e->custom_clips[e->custom_music_clip].buffer;
+        uint32_t len = e->custom_clips[e->custom_music_clip].length;
+        float mvol = e->music_volume_scale;
+        if (buf && len > 0) {
+            for (int s = 0; s < SAMPLES_PER_FRAME; s++) {
+                if (e->custom_music_pos >= len)
+                    e->custom_music_pos = 0;  /* loop */
+                int32_t ml = (int32_t)(buf[e->custom_music_pos * 2]     * mvol);
+                int32_t mr = (int32_t)(buf[e->custom_music_pos * 2 + 1] * mvol);
+                int32_t l = e->output_buffer[s * 2]     + ml;
+                int32_t r = e->output_buffer[s * 2 + 1] + mr;
+                e->output_buffer[s * 2]     = (int16_t)(l < -32768 ? -32768 : l > 32767 ? 32767 : l);
+                e->output_buffer[s * 2 + 1] = (int16_t)(r < -32768 ? -32768 : r > 32767 ? 32767 : r);
+                e->custom_music_pos++;
+            }
+        }
+    }
+
+    /* Mix custom SFX (one-shot), scaled by sfx_volume_scale */
+    if (e->custom_sfx_clip >= 0 && e->custom_sfx_clip < e->num_custom_clips) {
+        int16_t *buf = e->custom_clips[e->custom_sfx_clip].buffer;
+        uint32_t len = e->custom_clips[e->custom_sfx_clip].length;
+        float svol = e->sfx_volume_scale;
+        if (buf && len > 0) {
+            for (int s = 0; s < SAMPLES_PER_FRAME; s++) {
+                if (e->custom_sfx_pos >= len) {
+                    e->custom_sfx_clip = -1;  /* stop */
+                    break;
+                }
+                int32_t sl = (int32_t)(buf[e->custom_sfx_pos * 2]     * svol);
+                int32_t sr = (int32_t)(buf[e->custom_sfx_pos * 2 + 1] * svol);
+                int32_t l = e->output_buffer[s * 2]     + sl;
+                int32_t r = e->output_buffer[s * 2 + 1] + sr;
+                e->output_buffer[s * 2]     = (int16_t)(l < -32768 ? -32768 : l > 32767 ? 32767 : l);
+                e->output_buffer[s * 2 + 1] = (int16_t)(r < -32768 ? -32768 : r > 32767 ? 32767 : r);
+                e->custom_sfx_pos++;
+            }
+        } else {
+            e->custom_sfx_clip = -1;
+        }
     }
 
     /* PCM overlay: if a Pikachu sound clip is playing, replace APU output.
@@ -1620,12 +1718,13 @@ static void synthesize_frame(AudioEngine *e) {
 
 /* --- PCM Pikachu sound clip support --- */
 
-static const char *pcm_clip_files[2] = {
+static const char *pcm_default_files[2] = {
     "audio/sound_clips/pi_ka_chu.wav",
     "audio/sound_clips/piiiiikaaaa.wav"
 };
 
-void audio_init_pcm(AudioEngine *e, const char *base_path) {
+void audio_init_pcm(AudioEngine *e, const char *base_path,
+                    const char *clip_paths[2]) {
     if (!e) return;
 
     e->pcm_active_clip = -1;
@@ -1635,71 +1734,110 @@ void audio_init_pcm(AudioEngine *e, const char *base_path) {
         e->pcm_buffers[i] = NULL;
         e->pcm_lengths[i] = 0;
 
+        /* Use config-provided path if available, otherwise default */
+        const char *rel_path = pcm_default_files[i];
+        if (clip_paths && clip_paths[i] && clip_paths[i][0] != '\0')
+            rel_path = clip_paths[i];
+
         char path[512];
-        snprintf(path, sizeof(path), "%s/%s", base_path, pcm_clip_files[i]);
+        snprintf(path, sizeof(path), "%s/%s", base_path, rel_path);
 
-        SDL_AudioSpec wav_spec;
-        uint8_t *wav_buf = NULL;
-        uint32_t wav_len = 0;
+        if (has_extension(path, ".ogg")) {
+            /* Decode OGG via stb_vorbis */
+            int channels = 0, sample_rate = 0;
+            short *decoded = NULL;
+            int decoded_samples = stb_vorbis_decode_filename(path,
+                &channels, &sample_rate, &decoded);
+            if (decoded_samples <= 0 || !decoded) {
+                printf("[Audio] Warning: Could not decode PCM OGG '%s'\n", path);
+                continue;
+            }
 
-        if (!SDL_LoadWAV(path, &wav_spec, &wav_buf, &wav_len)) {
-            printf("[Audio] Warning: Could not load PCM clip '%s': %s\n",
-                   path, SDL_GetError());
-            continue;
-        }
-
-        /* Convert to match engine format: S16, 44100Hz, stereo */
-        SDL_AudioCVT cvt;
-        int ret = SDL_BuildAudioCVT(&cvt,
-            wav_spec.format, wav_spec.channels, wav_spec.freq,
-            AUDIO_S16SYS, 2, SAMPLE_RATE);
-
-        if (ret < 0) {
-            printf("[Audio] Warning: Could not build audio CVT for '%s': %s\n",
-                   pcm_clip_files[i], SDL_GetError());
-            SDL_FreeWAV(wav_buf);
-            continue;
-        }
-
-        if (ret == 0) {
-            /* No conversion needed — already in target format */
-            uint32_t num_samples = wav_len / (2 * sizeof(int16_t)); /* stereo S16 */
-            e->pcm_buffers[i] = (int16_t *)malloc(wav_len);
-            if (e->pcm_buffers[i]) {
-                memcpy(e->pcm_buffers[i], wav_buf, wav_len);
-                e->pcm_lengths[i] = num_samples;
+            if (channels == 2 && sample_rate == SAMPLE_RATE) {
+                e->pcm_buffers[i] = (int16_t *)decoded;
+                e->pcm_lengths[i] = (uint32_t)decoded_samples;
+            } else {
+                uint32_t raw_len = (uint32_t)(decoded_samples * channels * sizeof(int16_t));
+                SDL_AudioCVT cvt;
+                int ret = SDL_BuildAudioCVT(&cvt,
+                    AUDIO_S16SYS, (uint8_t)channels, sample_rate,
+                    AUDIO_S16SYS, 2, SAMPLE_RATE);
+                if (ret < 0) {
+                    printf("[Audio] Warning: CVT build failed for PCM OGG '%s'\n", path);
+                    free(decoded);
+                    continue;
+                }
+                cvt.len = (int)raw_len;
+                cvt.buf = (uint8_t *)malloc((size_t)(raw_len * cvt.len_mult));
+                if (!cvt.buf) { free(decoded); continue; }
+                memcpy(cvt.buf, decoded, raw_len);
+                free(decoded);
+                if (SDL_ConvertAudio(&cvt) < 0) {
+                    free(cvt.buf);
+                    continue;
+                }
+                uint32_t converted_len = (uint32_t)cvt.len_cvt;
+                e->pcm_buffers[i] = (int16_t *)malloc(converted_len);
+                if (e->pcm_buffers[i]) {
+                    memcpy(e->pcm_buffers[i], cvt.buf, converted_len);
+                    e->pcm_lengths[i] = converted_len / (2 * sizeof(int16_t));
+                }
+                free(cvt.buf);
             }
         } else {
-            /* Conversion needed */
-            cvt.len = (int)wav_len;
-            cvt.buf = (uint8_t *)malloc((size_t)(wav_len * cvt.len_mult));
-            if (!cvt.buf) {
+            /* Decode WAV via SDL_LoadWAV */
+            SDL_AudioSpec wav_spec;
+            uint8_t *wav_buf = NULL;
+            uint32_t wav_len = 0;
+
+            if (!SDL_LoadWAV(path, &wav_spec, &wav_buf, &wav_len)) {
+                printf("[Audio] Warning: Could not load PCM clip '%s': %s\n",
+                       path, SDL_GetError());
+                continue;
+            }
+
+            SDL_AudioCVT cvt;
+            int ret = SDL_BuildAudioCVT(&cvt,
+                wav_spec.format, wav_spec.channels, wav_spec.freq,
+                AUDIO_S16SYS, 2, SAMPLE_RATE);
+
+            if (ret < 0) {
+                printf("[Audio] Warning: Could not build audio CVT for '%s': %s\n",
+                       path, SDL_GetError());
                 SDL_FreeWAV(wav_buf);
                 continue;
             }
-            memcpy(cvt.buf, wav_buf, wav_len);
 
-            if (SDL_ConvertAudio(&cvt) < 0) {
-                printf("[Audio] Warning: Audio conversion failed for '%s': %s\n",
-                       pcm_clip_files[i], SDL_GetError());
+            if (ret == 0) {
+                uint32_t num_samples = wav_len / (2 * sizeof(int16_t));
+                e->pcm_buffers[i] = (int16_t *)malloc(wav_len);
+                if (e->pcm_buffers[i]) {
+                    memcpy(e->pcm_buffers[i], wav_buf, wav_len);
+                    e->pcm_lengths[i] = num_samples;
+                }
+            } else {
+                cvt.len = (int)wav_len;
+                cvt.buf = (uint8_t *)malloc((size_t)(wav_len * cvt.len_mult));
+                if (!cvt.buf) { SDL_FreeWAV(wav_buf); continue; }
+                memcpy(cvt.buf, wav_buf, wav_len);
+                if (SDL_ConvertAudio(&cvt) < 0) {
+                    free(cvt.buf);
+                    SDL_FreeWAV(wav_buf);
+                    continue;
+                }
+                uint32_t converted_len = (uint32_t)cvt.len_cvt;
+                e->pcm_buffers[i] = (int16_t *)malloc(converted_len);
+                if (e->pcm_buffers[i]) {
+                    memcpy(e->pcm_buffers[i], cvt.buf, converted_len);
+                    e->pcm_lengths[i] = converted_len / (2 * sizeof(int16_t));
+                }
                 free(cvt.buf);
-                SDL_FreeWAV(wav_buf);
-                continue;
             }
-
-            uint32_t converted_len = (uint32_t)cvt.len_cvt;
-            uint32_t num_samples = converted_len / (2 * sizeof(int16_t)); /* stereo S16 */
-            e->pcm_buffers[i] = (int16_t *)malloc(converted_len);
-            if (e->pcm_buffers[i]) {
-                memcpy(e->pcm_buffers[i], cvt.buf, converted_len);
-                e->pcm_lengths[i] = num_samples;
-            }
-            free(cvt.buf);
+            SDL_FreeWAV(wav_buf);
         }
 
-        SDL_FreeWAV(wav_buf);
         printf("[Audio] Loaded PCM clip '%s': %u samples\n",
-               pcm_clip_files[i], e->pcm_lengths[i]);
+               rel_path, e->pcm_lengths[i]);
     }
 }
 
@@ -1721,4 +1859,251 @@ void audio_cleanup_pcm(AudioEngine *e) {
         e->pcm_lengths[i] = 0;
     }
     e->pcm_active_clip = -1;
+}
+
+/* --- Custom WAV/OGG audio file support --- */
+
+/* Helper: check file extension (case-insensitive) */
+static bool has_extension(const char *path, const char *ext) {
+    size_t plen = strlen(path);
+    size_t elen = strlen(ext);
+    if (plen < elen) return false;
+    const char *suffix = path + plen - elen;
+    for (size_t i = 0; i < elen; i++) {
+        char a = suffix[i];
+        char b = ext[i];
+        if (a >= 'A' && a <= 'Z') a += 32;
+        if (b >= 'A' && b <= 'Z') b += 32;
+        if (a != b) return false;
+    }
+    return true;
+}
+
+int audio_load_custom_clip(AudioEngine *e, const char *file_path) {
+    if (!e || !file_path || file_path[0] == '\0') return -1;
+    if (e->num_custom_clips >= CUSTOM_CLIP_MAX) {
+        printf("[Audio] Warning: custom clip limit (%d) reached, cannot load '%s'\n",
+               CUSTOM_CLIP_MAX, file_path);
+        return -1;
+    }
+
+    int16_t *pcm_data = NULL;
+    uint32_t num_samples = 0; /* stereo sample pairs */
+
+    if (has_extension(file_path, ".ogg")) {
+        /* Decode OGG via stb_vorbis */
+        int channels = 0, sample_rate = 0;
+        short *decoded = NULL;
+        int decoded_samples = stb_vorbis_decode_filename(file_path,
+            &channels, &sample_rate, &decoded);
+        if (decoded_samples <= 0 || !decoded) {
+            printf("[Audio] Warning: failed to decode OGG '%s'\n", file_path);
+            return -1;
+        }
+
+        /* Convert to stereo 44100Hz S16 if needed */
+        if (channels == 2 && sample_rate == SAMPLE_RATE) {
+            /* Already in target format */
+            num_samples = (uint32_t)decoded_samples;
+            pcm_data = (int16_t *)decoded; /* take ownership */
+        } else {
+            /* Use SDL_AudioCVT for conversion */
+            uint32_t raw_len = (uint32_t)(decoded_samples * channels * sizeof(int16_t));
+            SDL_AudioCVT cvt;
+            int ret = SDL_BuildAudioCVT(&cvt,
+                AUDIO_S16SYS, (uint8_t)channels, sample_rate,
+                AUDIO_S16SYS, 2, SAMPLE_RATE);
+            if (ret < 0) {
+                printf("[Audio] Warning: CVT build failed for OGG '%s': %s\n",
+                       file_path, SDL_GetError());
+                free(decoded);
+                return -1;
+            }
+            if (ret == 0) {
+                /* No conversion needed (shouldn't happen given the check above) */
+                num_samples = (uint32_t)decoded_samples;
+                pcm_data = (int16_t *)decoded;
+            } else {
+                cvt.len = (int)raw_len;
+                cvt.buf = (uint8_t *)malloc((size_t)(raw_len * cvt.len_mult));
+                if (!cvt.buf) { free(decoded); return -1; }
+                memcpy(cvt.buf, decoded, raw_len);
+                free(decoded);
+
+                if (SDL_ConvertAudio(&cvt) < 0) {
+                    printf("[Audio] Warning: audio conversion failed for OGG '%s': %s\n",
+                           file_path, SDL_GetError());
+                    free(cvt.buf);
+                    return -1;
+                }
+                uint32_t converted_len = (uint32_t)cvt.len_cvt;
+                num_samples = converted_len / (2 * sizeof(int16_t));
+                pcm_data = (int16_t *)malloc(converted_len);
+                if (!pcm_data) { free(cvt.buf); return -1; }
+                memcpy(pcm_data, cvt.buf, converted_len);
+                free(cvt.buf);
+            }
+        }
+    } else if (has_extension(file_path, ".wav")) {
+        /* Decode WAV via SDL_LoadWAV */
+        SDL_AudioSpec wav_spec;
+        uint8_t *wav_buf = NULL;
+        uint32_t wav_len = 0;
+
+        if (!SDL_LoadWAV(file_path, &wav_spec, &wav_buf, &wav_len)) {
+            printf("[Audio] Warning: failed to load WAV '%s': %s\n",
+                   file_path, SDL_GetError());
+            return -1;
+        }
+
+        SDL_AudioCVT cvt;
+        int ret = SDL_BuildAudioCVT(&cvt,
+            wav_spec.format, wav_spec.channels, wav_spec.freq,
+            AUDIO_S16SYS, 2, SAMPLE_RATE);
+
+        if (ret < 0) {
+            printf("[Audio] Warning: CVT build failed for WAV '%s': %s\n",
+                   file_path, SDL_GetError());
+            SDL_FreeWAV(wav_buf);
+            return -1;
+        }
+
+        if (ret == 0) {
+            /* No conversion needed */
+            num_samples = wav_len / (2 * sizeof(int16_t));
+            pcm_data = (int16_t *)malloc(wav_len);
+            if (pcm_data) memcpy(pcm_data, wav_buf, wav_len);
+        } else {
+            cvt.len = (int)wav_len;
+            cvt.buf = (uint8_t *)malloc((size_t)(wav_len * cvt.len_mult));
+            if (!cvt.buf) { SDL_FreeWAV(wav_buf); return -1; }
+            memcpy(cvt.buf, wav_buf, wav_len);
+
+            if (SDL_ConvertAudio(&cvt) < 0) {
+                printf("[Audio] Warning: audio conversion failed for WAV '%s': %s\n",
+                       file_path, SDL_GetError());
+                free(cvt.buf);
+                SDL_FreeWAV(wav_buf);
+                return -1;
+            }
+            uint32_t converted_len = (uint32_t)cvt.len_cvt;
+            num_samples = converted_len / (2 * sizeof(int16_t));
+            pcm_data = (int16_t *)malloc(converted_len);
+            if (pcm_data) memcpy(pcm_data, cvt.buf, converted_len);
+            free(cvt.buf);
+        }
+        SDL_FreeWAV(wav_buf);
+    } else {
+        printf("[Audio] Warning: unsupported audio format '%s' (use .wav or .ogg)\n",
+               file_path);
+        return -1;
+    }
+
+    if (!pcm_data || num_samples == 0) {
+        if (pcm_data) free(pcm_data);
+        return -1;
+    }
+
+    int idx = e->num_custom_clips;
+    e->custom_clips[idx].buffer = pcm_data;
+    e->custom_clips[idx].length = num_samples;
+    e->custom_clips[idx].loaded = true;
+    e->num_custom_clips++;
+
+    printf("[Audio] Loaded custom clip [%d] '%s': %u samples (%.1f sec)\n",
+           idx, file_path, num_samples, (double)num_samples / SAMPLE_RATE);
+    return idx;
+}
+
+void audio_load_custom_clips(AudioEngine *e, struct ConfigData *config,
+                             const char *base_path) {
+    if (!e || !config || !base_path) return;
+    if (!config->audio_config.audio_loaded) return;
+
+    AudioConfig *ac = &config->audio_config;
+    int loaded = 0;
+
+    /* Load custom clips for music entries */
+    for (int i = 0; i < ac->num_music; i++) {
+        AudioEntry *ae = &ac->music[i];
+        ae->clip_index = -1;
+        if (ae->file[0] == '\0') continue;
+
+        char full_path[640];
+        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, ae->file);
+
+        int idx = audio_load_custom_clip(e, full_path);
+        if (idx >= 0) {
+            ae->clip_index = idx;
+            loaded++;
+        } else {
+            printf("[Audio] Warning: custom music file '%s' failed to load, "
+                   "will use bytecode fallback (bank=%d, id=%d)\n",
+                   ae->file, ae->bank, ae->id);
+        }
+    }
+
+    /* Load custom clips for SFX entries */
+    for (int i = 0; i < ac->num_sfx; i++) {
+        AudioEntry *ae = &ac->sfx[i];
+        ae->clip_index = -1;
+        if (ae->file[0] == '\0') continue;
+
+        char full_path[640];
+        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, ae->file);
+
+        int idx = audio_load_custom_clip(e, full_path);
+        if (idx >= 0) {
+            ae->clip_index = idx;
+            loaded++;
+        } else {
+            printf("[Audio] Warning: custom SFX file '%s' failed to load, "
+                   "will use bytecode fallback (bank=%d, id=%d)\n",
+                   ae->file, ae->bank, ae->id);
+        }
+    }
+
+    if (loaded > 0)
+        printf("[Audio] Loaded %d custom audio clip(s)\n", loaded);
+}
+
+void audio_play_custom_music(AudioEngine *e, int clip_index) {
+    if (!e || clip_index < 0 || clip_index >= e->num_custom_clips) return;
+    if (!e->custom_clips[clip_index].loaded) return;
+
+    /* Stop bytecode music (deactivate channels 0-3) */
+    for (int i = 0; i < 4; i++)
+        e->channels[i][CH_FLAGS1] &= ~0x01;
+
+    e->custom_music_clip = clip_index;
+    e->custom_music_pos = 0;
+    printf("[Audio] Playing custom music clip [%d]\n", clip_index);
+}
+
+void audio_play_custom_sfx(AudioEngine *e, int clip_index) {
+    if (!e || clip_index < 0 || clip_index >= e->num_custom_clips) return;
+    if (!e->custom_clips[clip_index].loaded) return;
+
+    e->custom_sfx_clip = clip_index;
+    e->custom_sfx_pos = 0;
+}
+
+void audio_stop_custom_music(AudioEngine *e) {
+    if (!e) return;
+    e->custom_music_clip = -1;
+}
+
+void audio_cleanup_custom(AudioEngine *e) {
+    if (!e) return;
+    for (int i = 0; i < e->num_custom_clips; i++) {
+        if (e->custom_clips[i].buffer) {
+            free(e->custom_clips[i].buffer);
+            e->custom_clips[i].buffer = NULL;
+        }
+        e->custom_clips[i].length = 0;
+        e->custom_clips[i].loaded = false;
+    }
+    e->num_custom_clips = 0;
+    e->custom_music_clip = -1;
+    e->custom_sfx_clip = -1;
 }

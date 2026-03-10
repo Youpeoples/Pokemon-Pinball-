@@ -16,6 +16,7 @@
  */
 
 #include "game/diglett_bonus.h"
+#include "game/config_data.h"
 #include "game/sprite_data.h"
 #include "game/animation.h"
 #include "game/timer.h"
@@ -44,9 +45,7 @@ extern void draw_pinball(GameState *state);
 #define DIGLETT_INITIALIZE_DELAY 0x88
 #define BALL_X_GATE_THRESHOLD    0x8A
 
-/* 4-byte BCD scores (little-endian) */
-static const uint8_t DIGLETT_HIT_SCORE[4]  = {0x00, 0x00, 0x10, 0x00};  /* 100,000 */
-static const uint8_t DUGTRIO_HIT_SCORE[4]  = {0x00, 0x00, 0x00, 0x50};  /* 5,000,000 */
+/* Score values loaded from config/scores.json */
 
 /* Diglett bonus has NO timer (unlike other bonus stages) */
 
@@ -472,7 +471,7 @@ void init_diglett_bonus(GameState *state) {
     state->dugtrio_state = 0;
 
     /* Play diglett bonus music (Bank $11, MUSIC_WHACK_DIGLETT = $01) */
-    audio_play_music(state->audio, 0x11, 0x01);
+    PLAY_MUSIC(state, "whack_diglett", 0x11, 0x01);
 }
 
 /*=============================================================================
@@ -508,7 +507,7 @@ void init_ball_diglett_bonus(GameState *state) {
 void handle_ball_loss_diglett_bonus(GameState *state) {
     if (state->current_stage_backup == state->current_stage) return;
 
-    audio_play_sfx(state->audio, 0x00, 0x0B);
+    PLAY_SFX(state, "cave_light", 0x00, 0x0B);
     state->going_to_bonus_stage = 0;
     state->returning_from_bonus_stage = 1;
     state->ball_size = 2;
@@ -674,10 +673,10 @@ static void process_diglett_hit(GameState *state) {
     state->diglett_collision_trigger = 0;
 
     /* Award 100,000 points */
-    add_score_with_multiplier(state, DIGLETT_HIT_SCORE);
+    add_score_with_multiplier(state, state->config->scores.diglett_hit);
 
     /* SFX */
-    audio_play_sfx(state->audio, 0x00, 0x35);
+    PLAY_SFX(state, "diglett_pop", 0x00, 0x35);
 
     /* Collision force */
     state->flipper_y_force = 0x0100;
@@ -707,7 +706,7 @@ static void process_diglett_hit(GameState *state) {
         init_dugtrio_anim(state, 1);  /* Health3 animation */
         state->dugtrio_state = 1;
         open_dugtrio_collision_area(state);
-        audio_play_music(state->audio, 0x11, 0x02);  /* Bank $11, MUSIC_WHACK_DUGTRIO */
+        PLAY_MUSIC(state, "whack_dugtrio", 0x11, 0x02);  /* Bank $11, MUSIC_WHACK_DUGTRIO */
     }
 }
 
@@ -724,8 +723,8 @@ static void process_dugtrio_hit(GameState *state) {
             init_dugtrio_anim(state, state->dugtrio_state);
 
             /* Award 5,000,000 points */
-            add_score_with_multiplier(state, DUGTRIO_HIT_SCORE);
-            audio_play_sfx(state->audio, 0x00, 0x36);
+            add_score_with_multiplier(state, state->config->scores.dugtrio_hit);
+            PLAY_SFX(state, "dugtrio_appear", 0x00, 0x36);
 
             /* Rumble feedback (ASM: wRumblePattern=$33, wRumbleDuration=$08) */
             state->rumble_pattern = 0x33;
@@ -781,7 +780,7 @@ static void process_dugtrio_hit(GameState *state) {
     case 7: /* Defeated animation */
         if (idx == 1) {
             /* First entry expired — stop music */
-            audio_play_music(state->audio, 0x00, 0x00);
+            PLAY_MUSIC(state, "nothing", 0x00, 0x00);
         } else if (idx == 2) {
             /* Second entry expired — stage cleared */
             init_dugtrio_anim(state, 0);  /* dropped animation */
@@ -796,7 +795,7 @@ static void process_dugtrio_hit(GameState *state) {
             const uint8_t header[6] = { 5, 0x54, 0x3F, 20, 0, 62 };
             load_scrolling_text(state, 2, header, "DIGLETT STAGE CLEARED");
 
-            audio_play_sfx(state->audio, 0x4B, 0x2A);
+            PLAY_SFX(state, "bonus_stage_clear", 0x4B, 0x2A);
             state->flippers_disabled = 1;
             load_flippers_palette_diglett(state);
             write_cleared_collision_area(state);

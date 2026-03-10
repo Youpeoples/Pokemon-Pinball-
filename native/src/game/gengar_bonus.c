@@ -14,6 +14,7 @@
  */
 
 #include "game/gengar_bonus.h"
+#include "game/config_data.h"
 #include "game/sprite_data.h"
 #include "game/animation.h"
 #include "game/timer.h"
@@ -33,11 +34,7 @@
 /*=============================================================================
  * Constants
  *===========================================================================*/
-/* 4-byte BCD scores (little-endian) */
-static const uint8_t GASTLY_HIT_SCORE[4]  = {0x00, 0x00, 0x10, 0x00};  /* 100,000 */
-static const uint8_t HAUNTER_HIT_SCORE[4] = {0x00, 0x00, 0x00, 0x05};  /* 500,000 */
-static const uint8_t GENGAR_HIT_SCORE[4]  = {0x00, 0x00, 0x00, 0x50};  /* 5,000,000 */
-static const uint8_t GRAVESTONE_SCORE[4]  = {0x00, 0x01, 0x00, 0x00};  /* 100 */
+/* Score constants now read from state->config->scores (see config/scores.json) */
 
 /* Forward declarations for ghost tile loading helpers */
 static void load_gastly_tiles(GameState *state);
@@ -571,7 +568,7 @@ void init_gengar_bonus(GameState *state) {
     start_timer(state, 0x01, 0x30);
 
     /* Play Gastly Graveyard music (bank 0x0F, id 0x05) */
-    audio_play_music(state->audio, 0x0F, 0x05);
+    PLAY_MUSIC(state, "gastly_graveyard", 0x0F, 0x05);
 }
 
 /*=============================================================================
@@ -637,7 +634,7 @@ void handle_ball_loss_gengar_bonus(GameState *state) {
     }
 
     /* Ball loss SFX */
-    audio_play_sfx(state->audio, 0x00, 0x02);
+    PLAY_SFX(state, "wall_bounce", 0x00, 0x02);
 }
 
 /*=============================================================================
@@ -791,11 +788,11 @@ static void play_low_time_sfx(GameState *state) {
     if (state->timer_frames != 0) return;
     if (state->timer_minutes != 0) return;
     if (state->timer_seconds == 32) {
-        audio_play_sfx(state->audio, 0x07, 0x49);
+        PLAY_SFX(state, "countdown_32sec", 0x07, 0x49);
     } else if (state->timer_seconds == 16) {
-        audio_play_sfx(state->audio, 0x0A, 0x4A);
+        PLAY_SFX(state, "countdown_16sec", 0x0A, 0x4A);
     } else if (state->timer_seconds == 5) {
-        audio_play_sfx(state->audio, 0x0D, 0x4B);
+        PLAY_SFX(state, "countdown_5sec", 0x0D, 0x4B);
     }
 }
 
@@ -827,7 +824,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                     init_animation(anims[idx], gastly_hit_anim);
                     *in_hit[idx] = 1;
                     state->num_gastly_hits++;
-                    add_score_with_multiplier(state, GASTLY_HIT_SCORE);
+                    add_score_with_multiplier(state, state->config->scores.gastly_hit);
                     /* Rumble */
                     state->rumble_pattern = 0x33;
                     state->rumble_duration = 0x08;
@@ -835,7 +832,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                     state->flipper_y_force = 0x0100;
                     state->flipper_collision = 0x80;
                     /* SFX */
-                    audio_play_sfx(state->audio, 0x00, 0x2C);
+                    PLAY_SFX(state, "gastly_hit", 0x00, 0x2C);
                 }
             }
         }
@@ -903,7 +900,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                         state->haunter1_enabled = 1;
                         state->haunter2_enabled = 1;
                         load_haunter_tiles(state);
-                        audio_play_music(state->audio, 0x0F, 0x06);
+                        PLAY_MUSIC(state, "haunter_graveyard", 0x0F, 0x06);
                     } else {
                         /* Count non-hit gastly + hits to see if we've reached 10 */
                         uint8_t count = state->num_gastly_hits;
@@ -937,12 +934,12 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                     init_animation(h_anims[idx], haunter_hit_anim);
                     *h_hit[idx] = 1;
                     state->num_haunter_hits++;
-                    add_score_with_multiplier(state, HAUNTER_HIT_SCORE);
+                    add_score_with_multiplier(state, state->config->scores.haunter_hit);
                     state->rumble_pattern = 0x33;
                     state->rumble_duration = 0x08;
                     state->flipper_y_force = 0x0100;
                     state->flipper_collision = 0x80;
-                    audio_play_sfx(state->audio, 0x00, 0x2D);
+                    PLAY_SFX(state, "haunter_hit", 0x00, 0x2D);
                 }
             }
         }
@@ -1019,7 +1016,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                                 }
                             }
                             /* L1: MUSIC_NOTHING plays at index $12 (not $13) */
-                            audio_play_music(state->audio, 0x00, 0x00);
+                            PLAY_MUSIC(state, "nothing", 0x00, 0x00);
                         } else {
                             uint8_t count = state->num_haunter_hits;
                             for (int j = 0; j < 2; j++) {
@@ -1062,14 +1059,14 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                     state->flippers_disabled = 1;
                     load_flippers_palette_gengar(state); /* ASM line 722 */
                     stop_timer(state);
-                    audio_play_music(state->audio, 0x00, 0x00);
+                    PLAY_MUSIC(state, "nothing", 0x00, 0x00);
                 } else {
                     /* Normal hit */
                     init_animation(&state->gengar_anim, gengar_normal_hit_anim);
                     state->gengar_phase = 2;  /* ASM: ld a, $2 / ld [de], a */
-                    audio_play_sfx(state->audio, 0x00, 0x37);
+                    PLAY_SFX(state, "gengar_appear", 0x00, 0x37);
                 }
-                add_score_with_multiplier(state, GENGAR_HIT_SCORE);
+                add_score_with_multiplier(state, state->config->scores.gengar_hit);
                 state->rumble_pattern = 0x33;
                 state->rumble_duration = 0x08;
                 state->flipper_y_force = 0x0200;
@@ -1191,7 +1188,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                     case 3:
                         /* Death: index == 1 → play SFX, index == 0xFE → stage cleared */
                         if (state->gengar_anim.index == 1) {
-                            audio_play_sfx(state->audio, 0x00, 0x2E);
+                            PLAY_SFX(state, "gengar_hit", 0x00, 0x2E);
                         } else if (state->gengar_anim.index == 0xFE) {
                             state->gengar_defeated = 1;
                             state->next_bonus_stage = BONUS_STAGE_ORDER_MEWTWO;
@@ -1202,7 +1199,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                             /* scrolling_text_normal 0, 20, 0, 21 → {5, 0x54, 0x40, 20, 0, 61} */
                             uint8_t header[6] = { 5, 0x54, 0x40, 20, 0, 61 };
                             load_scrolling_text(state, 2, header, text);
-                            audio_play_sfx(state->audio, 0x4B, 0x2A);
+                            PLAY_SFX(state, "bonus_stage_clear", 0x4B, 0x2A);
                         }
                         break;
                     case 4:
@@ -1210,7 +1207,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
                         if (state->gengar_anim.index == 2) {
                             init_animation(&state->gengar_anim, gengar_idle_anim);
                             state->gengar_phase = 0;
-                            audio_play_music(state->audio, 0x0F, 0x05);
+                            PLAY_MUSIC(state, "gastly_graveyard", 0x0F, 0x05);
                         }
                         break;
                 }
@@ -1222,7 +1219,7 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
             if (state->gengar_upper_tilt_active) {
                 if (state->gengar_upper_tilt_counter >= 3) {
                     /* Reached max push: play SFX and start cooldown */
-                    audio_play_sfx(state->audio, 0x00, 0x2B);
+                    PLAY_SFX(state, "gengar_retreat", 0x00, 0x2B);
                     state->gengar_upper_tilt_cooldown = 1;
                     state->gengar_upper_tilt_active = 0;
                 } else {
@@ -1268,13 +1265,13 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
         uint8_t grav = state->which_gravestone;
         state->which_gravestone = 0;
         if (!state->flippers_disabled) {
-            add_score_with_multiplier(state, GRAVESTONE_SCORE);
+            add_score_with_multiplier(state, state->config->scores.gravestone);
             state->rumble_pattern = 0xFF;
             state->rumble_duration = 0x03;
             /* Bounce direction comes from tile collision, not AABB.
              * ASM: HandleGameObjectCollision uses IsCollisionInList to
              * gate on tile attribute — tile collision handles the force. */
-            audio_play_sfx(state->audio, 0x00, 0x2F);
+            PLAY_SFX(state, "gengar_bonus_clear", 0x00, 0x2F);
         }
         (void)grav;
     }

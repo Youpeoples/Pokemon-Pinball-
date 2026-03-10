@@ -11,6 +11,7 @@
 
 #include "game/tilt.h"
 #include "game/joypad.h"
+#include "game/config_data.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
 #include <stdio.h>
@@ -102,7 +103,7 @@ static void handle_tilt_direction(
 
     /* ASM: play tilt SFX on first push (counter 0→1) */
     if (*counter == 1) {
-        audio_play_sfx(state->audio, 0x00, 0x3F);
+        PLAY_SFX(state, "tilt", 0x00, 0x3F);
     }
 
     /* Move ball position if visible and tilt enabled */

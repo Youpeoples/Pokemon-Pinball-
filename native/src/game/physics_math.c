@@ -11,6 +11,7 @@
  */
 
 #include "game/physics_math.h"
+#include "game/config_data.h"
 #include "audio/audio.h"
 #include <string.h>
 
@@ -197,32 +198,33 @@ void apply_collision_forces(GameState *state, int16_t *vx, int16_t *vy) {
         }
     }
 
-    /* Dampen Y velocity: divide by 4 (arithmetic shift right twice) */
+    /* Dampen Y velocity (configurable shift values) */
     /* ASM uses unsigned shift: srl d; rr e (twice) */
+    const PhysicsConfig *phys = &state->config->physics;
     uint16_t uy = (uint16_t)y;
-    uint16_t damped = uy >> 2;       /* Y / 4 */
-    uint16_t damped8 = uy >> 3;      /* Y / 8 */
+    uint16_t damped = uy >> phys->damping_shift;       /* default: Y / 4 */
+    uint16_t damped_amp = uy >> phys->amplification_shift; /* default: Y / 8 */
 
-    /* Apply amplification: add Y/8 for each unit of amplification */
+    /* Apply amplification: add damped_amp for each unit of amplification */
     uint8_t amp = state->collision_force_amplification;
     uint16_t total = damped;
     for (uint8_t i = 0; i < amp; i++) {
-        total += damped8;
+        total += damped_amp;
     }
 
     /* Negate (bounce): two's complement */
     y = -(int16_t)total;
 
-    /* Spin transfer: add half of ball spin to X velocity */
+    /* Spin transfer: add spin >> spin_transfer_shift to X velocity */
     int8_t spin = (int8_t)state->ball_spin;
-    int8_t half_spin = spin >> 1;  /* ASM: sra a (arithmetic right shift) */
+    int8_t half_spin = spin >> phys->spin_transfer_shift;  /* default: spin / 2 */
     int16_t spin16 = (int16_t)half_spin;  /* sign-extend to 16 bits */
     x += spin16;
 
-    /* Recalculate ball spin from new X velocity: (X * 4) >> 8 */
+    /* Recalculate ball spin from new X velocity: (X << spin_recalc_shift) >> 8 */
     /* ASM: sla c; rl b; sla c; rl b; result = b */
-    int16_t x4 = x << 2;
-    state->ball_spin = (uint8_t)(int8_t)(x4 >> 8);
+    int16_t x_shifted = x << phys->spin_recalc_shift;  /* default: X * 4 */
+    state->ball_spin = (uint8_t)(int8_t)(x_shifted >> 8);
 
     *vx = x;
     *vy = y;

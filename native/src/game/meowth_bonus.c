@@ -15,6 +15,7 @@
  */
 
 #include "game/meowth_bonus.h"
+#include "game/config_data.h"
 #include "game/sprite_data.h"
 #include "game/animation.h"
 #include "game/timer.h"
@@ -39,19 +40,18 @@ static void play_low_time_sfx(GameState *state) {
     if (state->timer_frames != 0) return;
     if (state->timer_minutes != 0) return;
     if (state->timer_seconds == 32) {
-        audio_play_sfx(state->audio, 0x07, 0x49);
+        PLAY_SFX(state, "countdown_32sec", 0x07, 0x49);
     } else if (state->timer_seconds == 16) {
-        audio_play_sfx(state->audio, 0x0A, 0x4A);
+        PLAY_SFX(state, "countdown_16sec", 0x0A, 0x4A);
     } else if (state->timer_seconds == 5) {
-        audio_play_sfx(state->audio, 0x0D, 0x4B);
+        PLAY_SFX(state, "countdown_5sec", 0x0D, 0x4B);
     }
 }
 
 /*=============================================================================
  * Constants
  *===========================================================================*/
-static const uint8_t ONE_THOUSAND_POINTS[4]         = {0x00, 0x10, 0x00, 0x00}; /* 1,000 */
-static const uint8_t ONE_HUNDRED_THOUSAND_POINTS[4] = {0x00, 0x00, 0x10, 0x00}; /* 100,000 */
+/* Score values loaded from config/scores.json */
 
 /*=============================================================================
  * Collision angle data — loaded from binary files
@@ -496,7 +496,7 @@ void init_meowth_bonus(GameState *state) {
     start_timer(state, 1, 0);
 
     /* Music: bank 0x12, id 0x04 (Meowth Stage) */
-    audio_play_music(state->audio, 0x12, 0x04);
+    PLAY_MUSIC(state, "meowth_stage", 0x12, 0x04);
 }
 
 /*=============================================================================
@@ -585,7 +585,7 @@ void handle_ball_loss_meowth_bonus(GameState *state) {
 
     if (state->meowth_completion_state == 0) {
         /* Play ball saved SFX */
-        audio_play_sfx(state->audio, 0x00, 0x02);
+        PLAY_SFX(state, "wall_bounce", 0x00, 0x02);
         return;
     }
 
@@ -778,13 +778,13 @@ static void handle_jewel_hit_bonus(GameState *state, uint8_t jewel_x, uint8_t je
 
     state->rumble_pattern = 0xFF;
     state->rumble_duration = 3;
-    audio_play_sfx(state->audio, 0x00, 0x32);
+    PLAY_SFX(state, "meowth_hit", 0x00, 0x32);
 
     /* Add score: 100,000 × bonus_counter times */
     uint8_t count = state->meowth_stage_bonus_counter;
     if (count == 0) count = 7; /* Just wrapped: was 7, add 7× */
     for (uint8_t i = 0; i < count; i++) {
-        add_score_with_multiplier(state, ONE_HUNDRED_THOUSAND_POINTS);
+        add_score_with_multiplier(state, state->config->scores.meowth_hit);
         state->meowth_stage_score++;
     }
 
@@ -1034,7 +1034,7 @@ static void update_bottom_jewels(GameState *state) {
             if (state->meowth_jewel_anim_index[i] >= 0x0A) {
                 state->num_active_jewels_bottom++;
                 state->meowth_jewel_state[i] = 2;
-                audio_play_sfx(state->audio, 0x00, 0x34);
+                PLAY_SFX(state, "jewel_collect", 0x00, 0x34);
             } else {
                 update_jewel_movement(state, i);
             }
@@ -1094,7 +1094,7 @@ static void update_top_jewels(GameState *state) {
         if (state->meowth_jewel_state[i] == 1) {
             if (state->meowth_jewel_anim_index[i] >= 0x0A) {
                 state->meowth_jewel_state[i] = 2;
-                audio_play_sfx(state->audio, 0x00, 0x34);
+                PLAY_SFX(state, "jewel_collect", 0x00, 0x34);
             } else {
                 update_jewel_movement(state, i);
             }
@@ -1205,8 +1205,8 @@ void resolve_meowth_bonus_object_collisions(GameState *state) {
 
         state->rumble_pattern = 0xFF;
         state->rumble_duration = 3;
-        audio_play_sfx(state->audio, 0x00, 0x33);
-        add_score_with_multiplier(state, ONE_THOUSAND_POINTS);
+        PLAY_SFX(state, "meowth_move", 0x00, 0x33);
+        add_score_with_multiplier(state, state->config->scores.meowth_jewel);
         state->meowth_stage_bonus_counter = 0;
 
         /* Transition to hit animation */
@@ -1249,14 +1249,14 @@ void resolve_meowth_bonus_object_collisions(GameState *state) {
                 state->meowth_completion_state = BONUS_STAGE_ORDER_SEEL;
                 state->next_bonus_stage = BONUS_STAGE_ORDER_SEEL;
                 state->meowth_transition_timer = 0x96;
-                audio_play_music(state->audio, 0, 0); /* Stop music */
+                PLAY_MUSIC(state, "nothing", 0, 0); /* Stop music */
                 state->completed_bonus_stage = 1;
                 fill_bottom_message_buffer_with_black_tile(state);
                 enable_bottom_text(state);
                 /* scrolling_text_normal 0, 20, 0, 21 → { 5, 0x54, 0x40, 20, 0, 61 } */
                 const uint8_t header[6] = { 5, 0x54, 0x40, 20, 0, 61 };
                 load_scrolling_text(state, 2, header, "MEOWTH STAGE CLEARED");
-                audio_play_sfx(state->audio, 0x4B, 0x2A);
+                PLAY_SFX(state, "bonus_stage_clear", 0x4B, 0x2A);
             }
         }
     }
@@ -1264,7 +1264,7 @@ void resolve_meowth_bonus_object_collisions(GameState *state) {
     /* Music restart after time SFX */
     if (state->meowth_completion_state == 4) {
         if (state->sfx_timer == 0) {
-            audio_play_music(state->audio, 0x12, 0x04);
+            PLAY_MUSIC(state, "meowth_stage", 0x12, 0x04);
             state->meowth_completion_state = 5;
         }
     }

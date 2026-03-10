@@ -27,7 +27,10 @@
 
 #include "../renderer/tile_loader.h"  /* load_binary_file */
 
+#include "game/config_data.h"
+
 #include <string.h>
+#include <stdio.h>
 
 /* Forward declarations */
 static void load_upgrade_triggers_graphics_blue(GameState *state);
@@ -48,17 +51,7 @@ static void ensure_force_field_data_loaded(GameState *state) {
     }
 }
 
-/*=============================================================================
- * Score constants (4-byte BCD, little-endian)
- *===========================================================================*/
-static const uint8_t SCORE_5[4]      = {0x05, 0x00, 0x00, 0x00};
-static const uint8_t SCORE_10[4]     = {0x10, 0x00, 0x00, 0x00};
-static const uint8_t SCORE_100[4]    = {0x00, 0x01, 0x00, 0x00};
-static const uint8_t SCORE_400[4]    = {0x00, 0x04, 0x00, 0x00};
-static const uint8_t SCORE_500[4]    = {0x00, 0x05, 0x00, 0x00};
-static const uint8_t SCORE_5000[4]   = {0x00, 0x50, 0x00, 0x00};
-static const uint8_t SCORE_10000[4]  = {0x00, 0x00, 0x01, 0x00};
-static const uint8_t SCORE_1000000[4]= {0x00, 0x00, 0x00, 0x01};
+/* Score constants now read from state->config->scores (see config/scores.json) */
 
 /*=============================================================================
  * Collision data tables from blue_stage_game_object_collision.asm
@@ -407,7 +400,7 @@ void init_blue_field(GameState *state) {
     get_bcd_for_next_bonus_multiplier_blue(state);
 
     /* Play blue field music: bank 0x10, id 0x01 */
-    audio_play_music(state->audio, 0x10, 0x01);
+    PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
 }
 
 /*=============================================================================
@@ -458,7 +451,7 @@ static void init_ball_blue_field_normal(GameState *state) {
     get_bcd_for_next_bonus_multiplier_blue(state);
 
     /* Restart blue field music */
-    audio_play_music(state->audio, 0x10, 0x01);
+    PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
 }
 
 static void start_ball_after_bonus_stage_blue(GameState *state) {
@@ -475,7 +468,7 @@ static void start_ball_after_bonus_stage_blue(GameState *state) {
     state->flippers_disabled = 0;
     state->ball_type = state->ball_type_backup;
 
-    audio_play_music(state->audio, 0x10, 0x01);
+    PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
 }
 
 /* Public entry point called from pinball.c */
@@ -505,7 +498,7 @@ static void handle_ball_loss_blue_field(GameState *state) {
                 state->ball_saver_timer_seconds = 1;
             }
         }
-        audio_play_sfx(state->audio, 0x15, 0x02);
+        PLAY_SFX(state, "ball_launch_spring", 0x15, 0x02);
         return;
     }
 
@@ -555,6 +548,7 @@ void conclude_special_mode_blue_field(GameState *state) {
 
     if (state->special_mode == 0) {
         /* ConcludeCatchEmMode */
+        state->slot_is_open = 0;
         state->in_special_mode = 0;
         state->wild_mon_is_hittable = 0;
         state->capturing_mon = 0;
@@ -595,6 +589,21 @@ void conclude_special_mode_blue_field(GameState *state) {
             load_billboard_tilemap(state);
             load_map_billboard_tile_data(state);
 
+            /* StageSharedBonusSlotGlowGfx+$60 → vTilesOB tile $20, $E0 bytes.
+             * Catch mode's billboard/pokemon sprites overwrite slot glow
+             * tiles at $8200+. Reload them from the PNG. */
+            {
+                char glow_path[260];
+                snprintf(glow_path, sizeof(glow_path), "%s/gfx/stage/shared/bonus_slot_glow.png",
+                         state->asset_base_path);
+                size_t glow_size = 0;
+                uint8_t *glow_data = tiles_from_png(glow_path, &glow_size);
+                if (glow_data && glow_size >= 0x60 + 0xE0) {
+                    vram_write(state->vram, 0, 0x8200, glow_data + 0x60, 0xE0);
+                }
+                free(glow_data);
+            }
+
             /* BlankSaverSpaceTileData: restore tiles at $8AE0, $8B00, $8B20 */
             {
                 char path[260];
@@ -634,6 +643,7 @@ void conclude_special_mode_blue_field(GameState *state) {
 
     if (state->special_mode == SPECIAL_MODE_EVOLUTION) {
         /* M7: Full ConcludeEvolutionMode_BlueField (evolution_mode.asm:833-862) */
+        state->slot_is_open = 0;
         state->in_special_mode = 0;
         state->evolution_objects_disabled = 0;
         state->wd643 = 0;
@@ -662,8 +672,19 @@ void conclude_special_mode_blue_field(GameState *state) {
             /* Bottom stage: reload graphics */
             load_slot_cave_cover_graphics_blue(state);
             load_map_billboard_tile_data(state);
-            /* Reload shared bonus slot glow GFX, OBJ palette 7,
-             * blank saver tiles, pokeball graphics (cosmetic tile reloads) */
+            /* StageSharedBonusSlotGlowGfx+$60 → vTilesOB tile $20, $E0 bytes.
+             * Evolution mode's sprites overwrite slot glow tiles at $8200+. */
+            {
+                char glow_path[260];
+                snprintf(glow_path, sizeof(glow_path), "%s/gfx/stage/shared/bonus_slot_glow.png",
+                         state->asset_base_path);
+                size_t glow_size = 0;
+                uint8_t *glow_data = tiles_from_png(glow_path, &glow_size);
+                if (glow_data && glow_size >= 0x60 + 0xE0) {
+                    vram_write(state->vram, 0, 0x8200, glow_data + 0x60, 0xE0);
+                }
+                free(glow_data);
+            }
         }
         /* RestoreBallSaverAfterCatchEmMode (ASM 0x10196) */
         state->ball_saver_timer_frames = state->ball_saver_timer_frames_backup;
@@ -682,6 +703,7 @@ void conclude_special_mode_blue_field(GameState *state) {
     }
 
     /* M8: ConcludeMapMoveMode (map_move.asm 0x3022b → Func_313c3 for blue) */
+    state->slot_is_open = 0;
     state->bottom_text_enabled = 0;
     fill_bottom_message_buffer_with_black_tile(state);
     state->in_special_mode = 0;
@@ -851,20 +873,63 @@ static void check_evolution_trinket_collision_blue(GameState *state) {
 }
 
 /*=============================================================================
+ * Config-Aware Object Group Lookup
+ *===========================================================================*/
+static const TableObjectGroup *find_config_group(const TableConfig *table, const char *name) {
+    for (uint8_t i = 0; i < table->num_groups; i++) {
+        if (strcmp(table->groups[i].name, name) == 0)
+            return &table->groups[i];
+    }
+    return NULL;
+}
+
+/*
+ * Config-aware collision check wrapper for Blue Field's packed data format.
+ * Builds packed data from config group if available, else uses defaults.
+ */
+static void check_object_group_blue(GameState *state,
+    const TableConfig *table, const char *group_name,
+    const uint8_t *default_data, const uint8_t *default_attrs,
+    uint8_t *which_var, uint8_t *which_id_var, bool default_has_attrs)
+{
+    const TableObjectGroup *grp = find_config_group(table, group_name);
+    if (grp && grp->num_objects > 0) {
+        /* Build packed data: [half_w, half_h, id, x, y, ..., 0xFF] */
+        uint8_t packed[2 + CONFIG_MAX_OBJECTS_PER_GROUP * 3 + 1];
+        packed[0] = grp->x_thresh;
+        packed[1] = grp->y_thresh;
+        int pos = 2;
+        for (int i = 0; i < grp->num_objects; i++) {
+            packed[pos++] = grp->objects[i].id;
+            packed[pos++] = grp->objects[i].x;
+            packed[pos++] = grp->objects[i].y;
+        }
+        packed[pos] = 0xFF;
+        check_game_object_collision(state, packed,
+            grp->attribute_gated ? grp->collision_attrs : NULL,
+            which_var, which_id_var, grp->attribute_gated);
+    } else {
+        check_game_object_collision(state, default_data, default_attrs,
+            which_var, which_id_var, default_has_attrs);
+    }
+}
+
+/*=============================================================================
  * CheckBlueStageTopGameObjectCollisions (0x1c520)
  *===========================================================================*/
 static void check_blue_stage_top_collisions(GameState *state) {
-    check_game_object_collision(state, shellder_collision_data, shellder_collision_attrs,
+    const TableConfig *t = &state->config->blue_field_top;
+    check_object_group_blue(state, t, "shellder", shellder_collision_data, shellder_collision_attrs,
         &state->which_shellder, &state->which_shellder_id, true);
-    check_game_object_collision(state, spinner_collision_data, NULL,
+    check_object_group_blue(state, t, "spinner", spinner_collision_data, NULL,
         &state->spinner_collision, NULL, false);
-    check_game_object_collision(state, board_triggers_collision_data, NULL,
+    check_object_group_blue(state, t, "board_triggers", board_triggers_collision_data, NULL,
         &state->which_board_trigger, &state->which_board_trigger_id, false);
-    check_game_object_collision(state, slowpoke_collision_data, NULL,
+    check_object_group_blue(state, t, "slowpoke", slowpoke_collision_data, NULL,
         &state->slowpoke_collision, NULL, false);
-    check_game_object_collision(state, cloyster_collision_data, NULL,
+    check_object_group_blue(state, t, "cloyster", cloyster_collision_data, NULL,
         &state->cloyster_collision, NULL, false);
-    check_game_object_collision(state, upgrade_triggers_collision_data, NULL,
+    check_object_group_blue(state, t, "upgrade_triggers", upgrade_triggers_collision_data, NULL,
         &state->which_pinball_upgrade_trigger, &state->which_pinball_upgrade_trigger_id, false);
     check_evolution_trinket_collision_blue(state);
 }
@@ -873,27 +938,28 @@ static void check_blue_stage_top_collisions(GameState *state) {
  * CheckBlueStageBottomGameObjectCollisions (0x1c536)
  *===========================================================================*/
 static void check_blue_stage_bottom_collisions(GameState *state) {
+    const TableConfig *t = &state->config->blue_field_bottom;
     uint8_t ball_y = (uint8_t)(state->ball_y_pos >> 8);
     if (ball_y < 0x56) {
         /* Upper half of bottom screen */
-        check_game_object_collision(state, wild_mon_collision_data, wild_mon_collision_attrs,
+        check_object_group_blue(state, t, "wild_mon", wild_mon_collision_data, wild_mon_collision_attrs,
             &state->wild_mon_collision, NULL, true);
-        check_game_object_collision(state, psyduck_poliwag_collision_data, psyduck_poliwag_collision_attrs,
+        check_object_group_blue(state, t, "psyduck_poliwag", psyduck_poliwag_collision_data, psyduck_poliwag_collision_attrs,
             &state->which_psyduck_poliwag, &state->which_psyduck_poliwag_id, true);
-        check_game_object_collision(state, bonus_multiplier_collision_data, bonus_multiplier_collision_attrs,
+        check_object_group_blue(state, t, "bonus_multipliers", bonus_multiplier_collision_data, bonus_multiplier_collision_attrs,
             &state->which_bonus_multiplier_railing, &state->which_bonus_multiplier_railing_id, true);
-        check_game_object_collision(state, slot_collision_data, NULL,
+        check_object_group_blue(state, t, "slot", slot_collision_data, NULL,
             &state->slot_collision, NULL, false);
         check_evolution_trinket_collision_blue(state);
     } else {
         /* Lower half of bottom screen */
-        check_game_object_collision(state, bumpers_collision_data, bumpers_collision_attrs,
+        check_object_group_blue(state, t, "bumpers", bumpers_collision_data, bumpers_collision_attrs,
             &state->which_bumper, &state->which_bumper_id, true);
-        check_game_object_collision(state, pikachu_collision_data, NULL,
+        check_object_group_blue(state, t, "pikachu", pikachu_collision_data, NULL,
             &state->which_pikachu, &state->which_pikachu_id, false);
-        check_game_object_collision(state, cave_lights_collision_data, NULL,
+        check_object_group_blue(state, t, "cave_lights", cave_lights_collision_data, NULL,
             &state->which_cave_light, &state->which_cave_light_id, false);
-        check_game_object_collision(state, launch_alley_collision_data, NULL,
+        check_object_group_blue(state, t, "launch_alley", launch_alley_collision_data, NULL,
             &state->pinball_launch_collision, NULL, false);
     }
 }
@@ -1013,7 +1079,7 @@ static void resolve_pinball_launch_collision_blue(GameState *state) {
         /* Y velocity = 0xFA71 (upward) */
         state->ball_y_velocity = (int16_t)0xFA71;
         state->enable_ball_gravity_and_tilt = 1;
-        audio_play_sfx(state->audio, 0x00, 0x0A);
+        PLAY_SFX(state, "pikachu_charge", 0x00, 0x0A);
     }
 
     state->previous_triggered_game_object = 0xFF;
@@ -1036,7 +1102,7 @@ static void resolve_pinball_launch_collision_blue(GameState *state) {
             state->current_map = blue_stage_initial_maps[idx];
 
             /* Play cycling SFX and load billboard picture */
-            audio_play_sfx(state->audio, 0x00, 0x48);
+            PLAY_SFX(state, "pikachu_full_charge", 0x00, 0x48);
             load_billboard_picture(state,
                 (uint8_t)(BILLBOARD_PALLET_TOWN_PIC + state->current_map));
             state->map_cycling_frames = 32;
@@ -1080,7 +1146,7 @@ static void resolve_shellder_collision(GameState *state) {
         state->rumble_duration = 3;
         state->flipper_y_force = 0x0200;
         state->flipper_collision = 0x80;
-        audio_play_sfx(state->audio, 0x00, 0x0E);
+        PLAY_SFX(state, "spinner", 0x00, 0x0E);
 
         /* Force field handling */
         if (!state->blue_stage_force_field_flipped_down) {
@@ -1097,7 +1163,7 @@ static void resolve_shellder_collision(GameState *state) {
         state->which_animated_shellder = state->which_shellder_id - 3;
 
         check_special_mode_collision(state, SPECIAL_COLLISION_SHELLDER);
-        add_score_with_multiplier(state, SCORE_500);
+        add_score_with_multiplier(state, state->config->scores.score_500);
         return;
     }
 
@@ -1197,7 +1263,7 @@ static void update_spinner_blue(GameState *state) {
     if (!completed) return;
 
     /* Completed a full rotation */
-    add_score_with_multiplier(state, SCORE_10);
+    add_score_with_multiplier(state, state->config->scores.score_10);
     increment_max100(&state->num_spinner_turns);
 
     if (state->pikachu_saver_charge >= MAX_PIKACHU_SAVER_CHARGE) {
@@ -1231,7 +1297,7 @@ static void resolve_wild_mon_collision_blue(GameState *state) {
     if (!state->wild_mon_collision) return;
     state->wild_mon_collision = 0;
     state->ball_hit_wild_mon = 1;
-    audio_play_sfx(state->audio, 0x00, 0x06);
+    PLAY_SFX(state, "bumper", 0x00, 0x06);
 }
 
 /*=============================================================================
@@ -1252,7 +1318,7 @@ static void resolve_bumpers_collision_blue(GameState *state) {
 
         /* Angle delta */
         state->collision_normal_angle += bumper_angle_deltas_blue[bumper_id - 1];
-        audio_play_sfx(state->audio, 0x00, 0x0B);
+        PLAY_SFX(state, "cave_light", 0x00, 0x0B);
     }
 
     if (state->bumper_light_up_duration > 0) {
@@ -1270,7 +1336,7 @@ static void resolve_board_trigger_collision_blue(GameState *state) {
     if (!state->which_board_trigger) return;
     state->which_board_trigger = 0;
 
-    add_score_with_multiplier(state, SCORE_5);
+    add_score_with_multiplier(state, state->config->scores.score_5);
 
     /* First trigger collision: advance collision state */
     if (state->stage_collision_state == 0) {
@@ -1363,7 +1429,7 @@ static void resolve_pikachu_collision_blue(GameState *state) {
         /* Partial bounce animation */
         init_animation(&state->pikachu_saver_anim, pikachu_saver_anim2_data_blue);
         state->pikachu_saver_state = 2;
-        audio_play_sfx(state->audio, 0x00, 0x3B);
+        PLAY_SFX(state, "slot_trigger", 0x00, 0x3B);
         goto update;
 
     do_save:
@@ -1410,12 +1476,12 @@ update:
                     add_extra_ball(state);
                 }
                 audio_play_pcm(state->audio, 1);
-                audio_play_sfx(state->audio, 0x16, 0x10);
+                PLAY_SFX(state, "extra_ball", 0x16, 0x10);
             } else if (idx == 17) {
                 /* Launch ball upward */
                 state->ball_y_velocity = (int16_t)0xFC00;
                 state->enable_ball_gravity_and_tilt = 1;
-                add_score_with_multiplier(state, SCORE_5000);
+                add_score_with_multiplier(state, state->config->scores.score_5000);
                 state->pikachu_saver_state = 0;
             }
         }
@@ -1434,7 +1500,7 @@ update:
         if (state->pikachu_saver_sound_cooldown > 0) {
             state->pikachu_saver_sound_cooldown--;
             if (state->pikachu_saver_sound_cooldown == 0x5A) {
-                audio_play_sfx(state->audio, 0x0F, 0x22);
+                PLAY_SFX(state, "slot_spin", 0x0F, 0x22);
             }
         }
     }
@@ -1446,8 +1512,8 @@ update:
 static void resolve_slowpoke_collision(GameState *state) {
     if (state->slowpoke_collision) {
         state->slowpoke_collision = 0;
-        add_score_with_multiplier(state, SCORE_10000);
-        audio_play_sfx(state->audio, 0x00, 0x05);
+        add_score_with_multiplier(state, state->config->scores.score_10000);
+        PLAY_SFX(state, "bumper_small", 0x00, 0x05);
 
         init_animation(&state->slowpoke_anim, slowpoke_collision_anim_data);
 
@@ -1495,7 +1561,7 @@ static void resolve_slowpoke_collision(GameState *state) {
         state->enable_ball_gravity_and_tilt = 1;
         state->ball_x_velocity = 0x00B0; /* rightward */
         state->ball_y_velocity = 0;
-        audio_play_sfx(state->audio, 0x00, 0x06);
+        PLAY_SFX(state, "bumper", 0x00, 0x06);
 
         if (state->wd642 == 0) {
             check_special_mode_collision(state, SPECIAL_COLLISION_SLOWPOKE);
@@ -1517,8 +1583,8 @@ static void resolve_slowpoke_collision(GameState *state) {
 static void resolve_cloyster_collision(GameState *state) {
     if (state->cloyster_collision) {
         state->cloyster_collision = 0;
-        add_score_with_multiplier(state, SCORE_10000);
-        audio_play_sfx(state->audio, 0x00, 0x05);
+        add_score_with_multiplier(state, state->config->scores.score_10000);
+        PLAY_SFX(state, "bumper_small", 0x00, 0x05);
 
         init_animation(&state->cloyster_anim, cloyster_collision_anim_data);
 
@@ -1562,7 +1628,7 @@ static void resolve_cloyster_collision(GameState *state) {
         state->enable_ball_gravity_and_tilt = 1;
         state->ball_x_velocity = (int16_t)0xFF4F; /* leftward */
         state->ball_y_velocity = 0;
-        audio_play_sfx(state->audio, 0x00, 0x06);
+        PLAY_SFX(state, "bumper", 0x00, 0x06);
 
         check_special_mode_collision(state, SPECIAL_COLLISION_CLOYSTER);
 
@@ -1660,8 +1726,8 @@ static void resolve_psyduck_poliwag_collision(GameState *state) {
         state->rumble_pattern = 0x55;
         state->rumble_duration = 4;
         state->collision_force_amplification = 2;
-        add_score_with_multiplier(state, SCORE_500);
-        audio_play_sfx(state->audio, 0x00, 0x0F);
+        add_score_with_multiplier(state, state->config->scores.score_500);
+        PLAY_SFX(state, "ball_drain", 0x00, 0x0F);
     }
 }
 
@@ -1803,7 +1869,7 @@ static void resolve_bonus_multiplier_collision_blue(GameState *state) {
     /* Collision occurred */
     uint8_t railing_id = state->which_bonus_multiplier_railing_id;
     state->which_bonus_multiplier_railing = 0;
-    audio_play_sfx(state->audio, 0x00, 0x0D);
+    PLAY_SFX(state, "ball_saver", 0x00, 0x0D);
 
     if (railing_id == 0x0F) {
         /* Hit left railing (blue field ID $0F)
@@ -1855,7 +1921,7 @@ static void resolve_bonus_multiplier_collision_blue(GameState *state) {
         }
     }
 
-    add_score_with_multiplier(state, SCORE_10);
+    add_score_with_multiplier(state, state->config->scores.score_10);
 }
 
 /* LoadSlotCaveCoverGraphics_BlueField (0x1e8f6)
@@ -1946,7 +2012,7 @@ static void resolve_ball_upgrade_triggers_blue(GameState *state) {
             state->ball_upgrade_trigger_states[trigger_idx] ? 0 : 1;
     }
 
-    add_score_with_multiplier(state, SCORE_100);
+    add_score_with_multiplier(state, state->config->scores.score_100);
 
     /* Check if all 3 triggers are on */
     if (state->ball_upgrade_trigger_states[0] &&
@@ -1958,7 +2024,7 @@ static void resolve_ball_upgrade_triggers_blue(GameState *state) {
         state->ball_upgrade_triggers_blinking_frames_remaining = 0x80;
         state->ball_type_counter = PINBALL_UPGRADE_FRAMES_COUNTER;
 
-        add_score_with_multiplier(state, SCORE_400);
+        add_score_with_multiplier(state, state->config->scores.score_400);
 
         /* FieldMultiplierText header: scrolling_text_normal 0, 20, 0, 20 */
         static const uint8_t FIELD_MULT_HEADER_BLUE[6] = { 5, 0x54, 0x40, 20, 0x00, 60 };
@@ -1968,8 +2034,8 @@ static void resolve_ball_upgrade_triggers_blue(GameState *state) {
         static const uint8_t DIGITS_1_8_BLUE[6] = { 7, 0x73, 0x46, 20, 0x20, 80 };
 
         if (state->ball_type >= MASTER_BALL) {
-            audio_play_sfx(state->audio, 0x0F, 0x4D);
-            add_score_no_multiplier(state, SCORE_1000000);
+            PLAY_SFX(state, "slot_start", 0x0F, 0x4D);
+            add_score_no_multiplier(state, state->config->scores.score_1000000);
             static const uint8_t bcd_1m_blue[4] = { 0x01, 0x00, 0x00, 0x00 };
             fill_bottom_message_buffer_with_black_tile(state);
             enable_bottom_text(state);
@@ -1977,7 +2043,7 @@ static void resolve_ball_upgrade_triggers_blue(GameState *state) {
             load_scrolling_text(state, 0, FIELD_MULT_SPECIAL_BLUE,
                                 "FIELD MULTIPLIER SPECIAL BONUS");
         } else {
-            audio_play_sfx(state->audio, 0x06, 0x3A);
+            PLAY_SFX(state, "slot_reel_stop", 0x06, 0x3A);
             fill_bottom_message_buffer_with_black_tile(state);
             enable_bottom_text(state);
             load_scrolling_text(state, 0, FIELD_MULT_HEADER_BLUE,
@@ -1989,7 +2055,7 @@ static void resolve_ball_upgrade_triggers_blue(GameState *state) {
         /* TransitionPinballUpgrade: reload ball sprite tiles + palette */
         load_ball_gfx(state);
     } else {
-        audio_play_sfx(state->audio, 0x00, 0x09);
+        PLAY_SFX(state, "object_hit", 0x00, 0x09);
     }
     goto load_gfx;
 
@@ -2084,15 +2150,15 @@ static void resolve_cave_light_collision_blue(GameState *state) {
         if (state->cave_light_states[light_idx]) goto no_collision; /* already on */
         state->cave_light_states[light_idx] = 1;
 
-        add_score_with_multiplier(state, SCORE_100);
+        add_score_with_multiplier(state, state->config->scores.score_100);
 
         /* Check if all 4 CAVE lights are on */
         if (state->cave_light_states[0] && state->cave_light_states[1] &&
             state->cave_light_states[2] && state->cave_light_states[3]) {
             state->cave_lights_blinking = 1;
             state->cave_lights_blinking_frames_remaining = 0x80;
-            add_score_with_multiplier(state, SCORE_400);
-            audio_play_sfx(state->audio, 0x00, 0x09);
+            add_score_with_multiplier(state, state->config->scores.score_400);
+            PLAY_SFX(state, "object_hit", 0x00, 0x09);
             increment_max100(&state->num_cave_completions);
         }
         /* ASM: falls through to LoadCAVELightsGraphics_BlueField */
@@ -2179,7 +2245,7 @@ static void resolve_slot_collision_blue(GameState *state) {
 
     uint8_t cnt = state->slot_enter_or_exit_counter;
     if (cnt == 0x12) {
-        audio_play_sfx(state->audio, 0x00, 0x21);
+        PLAY_SFX(state, "arrow_indicator", 0x00, 0x21);
         /* #24: ASM calls LoadMiniBallGfx at cnt==$12 */
         load_mini_ball_gfx(state);
     } else if (cnt == 0x0F) {
@@ -2222,7 +2288,7 @@ static void resolve_slot_collision_blue(GameState *state) {
                 load_scrolling_text(state, 2, "GO TO", "MEWTWO BONUS STAGE");
 
             audio_stop_all(state->audio);
-            audio_play_sfx(state->audio, 0x3C, 0x23);
+            PLAY_SFX(state, "bonus_stage_enter", 0x3C, 0x23);
             state->opened_slot_by_pokeballs = 0;
             state->catchem_or_evolution_slot_reward_active = 0;
             state->frames_until_slot_cave_opens = 30;
@@ -2291,7 +2357,7 @@ bonus_from_roulette:
         load_scrolling_text(state, 2, "GO TO", "MEWTWO BONUS STAGE");
 
     audio_stop_all(state->audio);
-    audio_play_sfx(state->audio, 0x3C, 0x23);
+    PLAY_SFX(state, "bonus_stage_enter", 0x3C, 0x23);
     state->opened_slot_by_pokeballs = 0;
     state->catchem_or_evolution_slot_reward_active = 0;
     state->frames_until_slot_cave_opens = 30;
@@ -2585,7 +2651,7 @@ static void apply_slot_force_field_impl(GameState *state, uint8_t ref_y) {
     if (state->rumble_duration) return;
     state->rumble_pattern = 0x05;
     state->rumble_duration = 0x08;
-    audio_play_sfx(state->audio, 0x00, 0x04);
+    PLAY_SFX(state, "map_move", 0x00, 0x04);
 }
 
 static void apply_slot_force_field_top_blue(GameState *state) {

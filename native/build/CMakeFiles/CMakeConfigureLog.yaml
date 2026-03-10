@@ -53,10 +53,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -75,9 +79,9 @@ events:
       The output was:
       0
       MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework
-      Build started 3/5/2026 10:24:51 PM.
+      Build started 3/10/2026 11:19:47 AM.
       
-      Project "C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.vcxproj" on node 1 (default targets).
+      Project "C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.vcxproj" on node 1 (default targets).
       PrepareForBuild:
         Creating directory "Debug\\".
         Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
@@ -90,7 +94,7 @@ events:
         CMakeCCompilerId.c
       Link:
         C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdC.exe" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdC.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdC.lib" /MACHINE:X64 Debug\\CMakeCCompilerId.obj
-        CompilerIdC.vcxproj -> C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.exe
+        CompilerIdC.vcxproj -> C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.exe
       PostBuildEvent:
         for %%i in (cl.exe) do @echo CMAKE_C_COMPILER=%%~$PATH:i
         :VCEnd
@@ -98,13 +102,13 @@ events:
       FinalizeBuildStatus:
         Deleting file "Debug\\CompilerIdC.tlog\\unsuccessfulbuild".
         Touching "Debug\\CompilerIdC.tlog\\CompilerIdC.lastbuildstate".
-      Done Building Project "C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.vcxproj" (default targets).
+      Done Building Project "C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\4.3.0-rc2\\CompilerIdC\\CompilerIdC.vcxproj" (default targets).
       
       Build succeeded.
           0 Warning(s)
           0 Error(s)
       
-      Time Elapsed 00:00:00.42
+      Time Elapsed 00:00:00.56
       
       
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CompilerIdC.exe"
@@ -112,7 +116,7 @@ events:
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CompilerIdC.vcxproj"
       
       The C compiler identification is MSVC, found in:
-        C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/4.3.0-rc2/CompilerIdC/CompilerIdC.exe
+        C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/4.3.0-rc2/CompilerIdC/CompilerIdC.exe
       
   -
     kind: "find-v1"
@@ -151,10 +155,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
     searched_directories:
@@ -180,10 +188,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -223,10 +235,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
     searched_directories:
@@ -275,6 +291,15 @@ events:
       - "C:/Program Files/Git/cmd/lld-link.com"
       - "C:/Program Files/Git/cmd/lld-link.exe"
       - "C:/Program Files/Git/cmd/lld-link"
+      - "C:/Program Files/dotnet/lld-link.com"
+      - "C:/Program Files/dotnet/lld-link.exe"
+      - "C:/Program Files/dotnet/lld-link"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.com"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.exe"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link"
+      - "C:/Program Files/CMake/bin/lld-link.com"
+      - "C:/Program Files/CMake/bin/lld-link.exe"
+      - "C:/Program Files/CMake/bin/lld-link"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/lld-link.com"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/lld-link.exe"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/lld-link"
@@ -287,6 +312,9 @@ events:
       - "C:/Users/ville/.bun/bin/lld-link.com"
       - "C:/Users/ville/.bun/bin/lld-link.exe"
       - "C:/Users/ville/.bun/bin/lld-link"
+      - "C:/Users/ville/.dotnet/tools/lld-link.com"
+      - "C:/Users/ville/.dotnet/tools/lld-link.exe"
+      - "C:/Users/ville/.dotnet/tools/lld-link"
       - "C:/Program Files/Git/usr/bin/vendor_perl/lld-link.com"
       - "C:/Program Files/Git/usr/bin/vendor_perl/lld-link.exe"
       - "C:/Program Files/Git/usr/bin/vendor_perl/lld-link"
@@ -314,10 +342,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -355,10 +387,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
     searched_directories:
@@ -384,10 +420,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -425,10 +465,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
     searched_directories:
@@ -477,6 +521,15 @@ events:
       - "C:/Program Files/Git/cmd/mt.com"
       - "C:/Program Files/Git/cmd/mt.exe"
       - "C:/Program Files/Git/cmd/mt"
+      - "C:/Program Files/dotnet/mt.com"
+      - "C:/Program Files/dotnet/mt.exe"
+      - "C:/Program Files/dotnet/mt"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.com"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.exe"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt"
+      - "C:/Program Files/CMake/bin/mt.com"
+      - "C:/Program Files/CMake/bin/mt.exe"
+      - "C:/Program Files/CMake/bin/mt"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/mt.com"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/mt.exe"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/mt"
@@ -489,6 +542,9 @@ events:
       - "C:/Users/ville/.bun/bin/mt.com"
       - "C:/Users/ville/.bun/bin/mt.exe"
       - "C:/Users/ville/.bun/bin/mt"
+      - "C:/Users/ville/.dotnet/tools/mt.com"
+      - "C:/Users/ville/.dotnet/tools/mt.exe"
+      - "C:/Users/ville/.dotnet/tools/mt"
       - "C:/Program Files/Git/usr/bin/vendor_perl/mt.com"
       - "C:/Program Files/Git/usr/bin/vendor_perl/mt.exe"
       - "C:/Program Files/Git/usr/bin/vendor_perl/mt"
@@ -516,10 +572,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -557,10 +617,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
     searched_directories:
@@ -586,10 +650,14 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
   -
@@ -629,10 +697,14 @@ events:
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
       - "C:/Program Files/nodejs/"
       - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/CMake/bin/"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/ville/AppData/Local/GitHubDesktop/bin/"
       - "C:/Users/ville/AppData/Roaming/npm/"
       - "C:/Users/ville/.bun/bin/"
+      - "C:/Users/ville/.dotnet/tools/"
       - "C:/Program Files/Git/usr/bin/vendor_perl/"
       - "C:/Program Files/Git/usr/bin/core_perl/"
       - "C:/Program Files/bin/"
@@ -644,9 +716,9 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files/CMake/sbin/"
       - "C:/Program Files/CMake/"
-      - "C:/Program Files/PokemonPinball/bin/"
-      - "C:/Program Files/PokemonPinball/sbin/"
-      - "C:/Program Files/PokemonPinball/"
+      - "C:/Program Files (x86)/PokemonPinball/bin/"
+      - "C:/Program Files (x86)/PokemonPinball/sbin/"
+      - "C:/Program Files (x86)/PokemonPinball/"
     searched_directories:
       - "C:/Users/ville/bin/rc.com"
       - "C:/Users/ville/bin/rc.exe"
@@ -690,6 +762,15 @@ events:
       - "C:/Program Files/Git/cmd/rc.com"
       - "C:/Program Files/Git/cmd/rc.exe"
       - "C:/Program Files/Git/cmd/rc"
+      - "C:/Program Files/dotnet/rc.com"
+      - "C:/Program Files/dotnet/rc.exe"
+      - "C:/Program Files/dotnet/rc"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.com"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.exe"
+      - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc"
+      - "C:/Program Files/CMake/bin/rc.com"
+      - "C:/Program Files/CMake/bin/rc.exe"
+      - "C:/Program Files/CMake/bin/rc"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/rc.com"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/rc.exe"
       - "C:/Users/ville/AppData/Local/Microsoft/WindowsApps/rc"
@@ -702,6 +783,9 @@ events:
       - "C:/Users/ville/.bun/bin/rc.com"
       - "C:/Users/ville/.bun/bin/rc.exe"
       - "C:/Users/ville/.bun/bin/rc"
+      - "C:/Users/ville/.dotnet/tools/rc.com"
+      - "C:/Users/ville/.dotnet/tools/rc.exe"
+      - "C:/Users/ville/.dotnet/tools/rc"
       - "C:/Program Files/Git/usr/bin/vendor_perl/rc.com"
       - "C:/Program Files/Git/usr/bin/vendor_perl/rc.exe"
       - "C:/Program Files/Git/usr/bin/vendor_perl/rc"
@@ -735,15 +819,15 @@ events:
       - "C:/Program Files/CMake/rc.com"
       - "C:/Program Files/CMake/rc.exe"
       - "C:/Program Files/CMake/rc"
-      - "C:/Program Files/PokemonPinball/bin/rc.com"
-      - "C:/Program Files/PokemonPinball/bin/rc.exe"
-      - "C:/Program Files/PokemonPinball/bin/rc"
-      - "C:/Program Files/PokemonPinball/sbin/rc.com"
-      - "C:/Program Files/PokemonPinball/sbin/rc.exe"
-      - "C:/Program Files/PokemonPinball/sbin/rc"
-      - "C:/Program Files/PokemonPinball/rc.com"
-      - "C:/Program Files/PokemonPinball/rc.exe"
-      - "C:/Program Files/PokemonPinball/rc"
+      - "C:/Program Files (x86)/PokemonPinball/bin/rc.com"
+      - "C:/Program Files (x86)/PokemonPinball/bin/rc.exe"
+      - "C:/Program Files (x86)/PokemonPinball/bin/rc"
+      - "C:/Program Files (x86)/PokemonPinball/sbin/rc.com"
+      - "C:/Program Files (x86)/PokemonPinball/sbin/rc.exe"
+      - "C:/Program Files (x86)/PokemonPinball/sbin/rc"
+      - "C:/Program Files (x86)/PokemonPinball/rc.com"
+      - "C:/Program Files (x86)/PokemonPinball/rc.exe"
+      - "C:/Program Files (x86)/PokemonPinball/rc"
     found: false
     search_context:
       ENV{PATH}:
@@ -765,18 +849,22 @@ events:
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
         - "C:\\Program Files\\nodejs"
         - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\dotnet"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit"
+        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\ville\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\ville\\AppData\\Local\\GitHubDesktop\\bin"
         - "C:\\Users\\ville\\AppData\\Roaming\\npm"
         - "C:\\Users\\ville\\.bun\\bin"
+        - "C:\\Users\\ville\\.dotnet\\tools"
         - "C:\\Program Files\\Git\\usr\\bin\\vendor_perl"
         - "C:\\Program Files\\Git\\usr\\bin\\core_perl"
-      CMAKE_INSTALL_PREFIX: "C:/Program Files/PokemonPinball"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/PokemonPinball"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
         - "C:/Program Files (x86)"
         - "C:/Program Files/CMake"
-        - "C:/Program Files/PokemonPinball"
+        - "C:/Program Files (x86)/PokemonPinball"
   -
     kind: "try_compile-v1"
     backtrace:
@@ -786,8 +874,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/CMakeScratch/TryCompile-a6vvta"
-      binary: "C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/CMakeScratch/TryCompile-a6vvta"
+      source: "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/CMakeScratch/TryCompile-zk6p6d"
+      binary: "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/CMakeScratch/TryCompile-zk6p6d"
     cmakeVariables:
       CMAKE_C_FLAGS: "/DWIN32 /D_WINDOWS"
       CMAKE_C_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -796,39 +884,39 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/CMakeScratch/TryCompile-a6vvta'
+        Change Dir: 'C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/CMakeScratch/TryCompile-zk6p6d'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_57fd6.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_8a472.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework
-        Build started 3/5/2026 10:24:52 PM.
+        Build started 3/10/2026 11:19:48 AM.
         
-        Project "C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-a6vvta\\cmTC_57fd6.vcxproj" on node 1 (default targets).
+        Project "C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-zk6p6d\\cmTC_8a472.vcxproj" on node 1 (default targets).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Creating directory "C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-a6vvta\\Debug\\".
-          Creating directory "cmTC_57fd6.dir\\Debug\\cmTC_57fd6.tlog\\".
+          Creating directory "C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-zk6p6d\\Debug\\".
+          Creating directory "cmTC_8a472.dir\\Debug\\cmTC_8a472.tlog\\".
         InitializeBuildStatus:
-          Creating "cmTC_57fd6.dir\\Debug\\cmTC_57fd6.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
-          Touching "cmTC_57fd6.dir\\Debug\\cmTC_57fd6.tlog\\unsuccessfulbuild".
+          Creating "cmTC_8a472.dir\\Debug\\cmTC_8a472.tlog\\unsuccessfulbuild" because "AlwaysCreate" was specified.
+          Touching "cmTC_8a472.dir\\Debug\\cmTC_8a472.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /Fo"cmTC_57fd6.dir\\Debug\\\\" /Fd"cmTC_57fd6.dir\\Debug\\vc145.pdb" /external:W1 /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCCompilerABI.c"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /Fo"cmTC_8a472.dir\\Debug\\\\" /Fd"cmTC_8a472.dir\\Debug\\vc145.pdb" /external:W1 /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCCompilerABI.c"
           Microsoft (R) C/C++ Optimizing Compiler Version 19.50.35725 for x64
           Copyright (C) Microsoft Corporation.  All rights reserved.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /Fo"cmTC_57fd6.dir\\Debug\\\\" /Fd"cmTC_57fd6.dir\\Debug\\vc145.pdb" /external:W1 /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCCompilerABI.c"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /RTC1 /MDd /Fo"cmTC_8a472.dir\\Debug\\\\" /Fd"cmTC_8a472.dir\\Debug\\vc145.pdb" /external:W1 /TC /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCCompilerABI.c"
           CMakeCCompilerABI.c
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-a6vvta\\Debug\\cmTC_57fd6.exe" /INCREMENTAL /ILK:"cmTC_57fd6.dir\\Debug\\cmTC_57fd6.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/CMakeScratch/TryCompile-a6vvta/Debug/cmTC_57fd6.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/ville/Documents/GitHub/Comp Proj/native/build/CMakeFiles/CMakeScratch/TryCompile-a6vvta/Debug/cmTC_57fd6.lib" /MACHINE:X64  /machine:x64 cmTC_57fd6.dir\\Debug\\CMakeCCompilerABI.obj
-          cmTC_57fd6.vcxproj -> C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-a6vvta\\Debug\\cmTC_57fd6.exe
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-zk6p6d\\Debug\\cmTC_8a472.exe" /INCREMENTAL /ILK:"cmTC_8a472.dir\\Debug\\cmTC_8a472.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/CMakeScratch/TryCompile-zk6p6d/Debug/cmTC_8a472.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/CMakeFiles/CMakeScratch/TryCompile-zk6p6d/Debug/cmTC_8a472.lib" /MACHINE:X64  /machine:x64 cmTC_8a472.dir\\Debug\\CMakeCCompilerABI.obj
+          cmTC_8a472.vcxproj -> C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-zk6p6d\\Debug\\cmTC_8a472.exe
         FinalizeBuildStatus:
-          Deleting file "cmTC_57fd6.dir\\Debug\\cmTC_57fd6.tlog\\unsuccessfulbuild".
-          Touching "cmTC_57fd6.dir\\Debug\\cmTC_57fd6.tlog\\cmTC_57fd6.lastbuildstate".
-        Done Building Project "C:\\Users\\ville\\Documents\\GitHub\\Comp Proj\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-a6vvta\\cmTC_57fd6.vcxproj" (default targets).
+          Deleting file "cmTC_8a472.dir\\Debug\\cmTC_8a472.tlog\\unsuccessfulbuild".
+          Touching "cmTC_8a472.dir\\Debug\\cmTC_8a472.tlog\\cmTC_8a472.lastbuildstate".
+        Done Building Project "C:\\Users\\ville\\Documents\\GitHub\\Pokemon Pinball +\\native\\build\\CMakeFiles\\CMakeScratch\\TryCompile-zk6p6d\\cmTC_8a472.vcxproj" (default targets).
         
         Build succeeded.
             0 Warning(s)
             0 Error(s)
         
-        Time Elapsed 00:00:00.39
+        Time Elapsed 00:00:00.38
         
       exitCode: 0
   -

@@ -18,6 +18,7 @@
 #include "game/sprite_data.h"
 #include "game/pokedex_data.h"
 #include "game/rng.h"
+#include "game/config_data.h"
 #include "audio/audio.h"
 #include "renderer/stage_assets.h"
 #include "renderer/stage_palettes.h"
@@ -737,7 +738,7 @@ static void handle_titlescreen(GameState *state) {
             state->title_screen_bouncing_ball_anim_frame = 0;
             state->title_screen_pokeball_anim_counter = 2;
             /* Play title screen music (Music_Title: bank $11, id $04) */
-            audio_play_music(state->audio, MUSIC_BANK_11, MUSIC_TITLE_SCREEN);
+            PLAY_MUSIC(state, "title_screen", 0x11, 0x04);
             state->screen_state = 1;
             break;
         case 1:
@@ -747,7 +748,7 @@ static void handle_titlescreen(GameState *state) {
                 uint8_t old_cursor = state->title_screen_cursor_selection;
                 move_menu_cursor(state, &state->title_screen_cursor_selection, 2);
                 if (state->title_screen_cursor_selection != old_cursor)
-                    audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                    PLAY_SFX(state, "cursor_move", 0x00, 0x03);
             }
             handle_titlescreen_animations(state);
 
@@ -757,7 +758,7 @@ static void handle_titlescreen(GameState *state) {
                     if (state->saved_game) {
                         /* Saved game exists: show continue prompt (state 2)
                          * ASM: plays SFX_CONFIRM ($00/$01) here */
-                        audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                        PLAY_SFX(state, "confirm", 0x00, 0x01);
                         state->titlescreen_continue_prompt_anim_frame = 0;
                         state->titlescreen_continue_prompt_anim_timer = 2;
                         state->title_screen_game_start_cursor_selection[0] = 1; /* default to CONTINUE */
@@ -766,18 +767,18 @@ static void handle_titlescreen(GameState *state) {
                         /* No saved game: ASM plays MUSIC_NOTHING, 1 frame,
                          * SFX $00/$27, then waits $37 (55) frames before state 3.
                          * Does NOT play SFX_CONFIRM in this path. */
-                        audio_play_music(state->audio, 0x0F, MUSIC_NOTHING);
+                        PLAY_MUSIC(state, "nothing", 0x0F, 0x00);
                         game_start_sfx_delay = 0x38; /* 56 frames (ASM: 1 AdvanceFrame + 55) */
                         game_start_next_state = 3;   /* go to Func_c1cb after delay */
                         state->screen_state = 5;
                     }
                 } else {
                     /* Player chose Pokedex or Options: SFX confirm + direct transition */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->screen_state = 3;
                 }
             } else if (state->hram.newly_pressed_buttons & BTN_B) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 /* B button goes to High Scores (state 4) */
                 state->screen_state = 4;
             }
@@ -795,7 +796,7 @@ static void handle_titlescreen(GameState *state) {
                     move_menu_cursor(state,
                         &state->title_screen_game_start_cursor_selection[0], 1);
                     if (state->title_screen_game_start_cursor_selection[0] != old_cursor)
-                        audio_play_sfx(state->audio, 0x00, 0x03);
+                        PLAY_SFX(state, "cursor_move", 0x00, 0x03);
                 }
 
                 /* Draw the continue prompt */
@@ -809,7 +810,7 @@ static void handle_titlescreen(GameState *state) {
                     /* ASM Func_c10e: MUSIC_NOTHING, 1 frame, SFX $00/$27,
                      * AdvanceFrames $0041 (65 frames), then check selection.
                      * Does NOT play SFX_CONFIRM. */
-                    audio_play_music(state->audio, 0x0F, MUSIC_NOTHING);
+                    PLAY_MUSIC(state, "nothing", 0x0F, 0x00);
                     game_start_sfx_delay = 0x42; /* 66 frames (ASM: 1 AdvanceFrame + 65) */
                     uint8_t sel = state->title_screen_game_start_cursor_selection[0];
                     if (sel == 0) {
@@ -825,7 +826,7 @@ static void handle_titlescreen(GameState *state) {
                     }
                 } else if (state->hram.newly_pressed_buttons & BTN_B) {
                     /* B: dismiss continue prompt, return to state 1 */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->titlescreen_continue_prompt_anim_frame = 8;
                     state->titlescreen_continue_prompt_anim_timer = 2;
                 }
@@ -874,7 +875,7 @@ static void handle_titlescreen(GameState *state) {
              * is played on the first frame here, then we count down. */
             if (game_start_sfx_delay == 0x37 || game_start_sfx_delay == 0x41) {
                 /* First frame: play the Game Start SFX */
-                audio_play_sfx(state->audio, 0x00, 0x27);
+                PLAY_SFX(state, "new_ball", 0x00, 0x27);
             }
             if (game_start_sfx_delay > 0) {
                 game_start_sfx_delay--;
@@ -1532,7 +1533,7 @@ static void animate_mon_sprite_if_start_pressed(GameState *state) {
         return;
 
     uint8_t idx = state->cur_pokedex_index;
-    uint8_t sprite_type = get_mon_animated_sprite_type(idx);
+    uint8_t sprite_type = get_mon_animated_sprite_type(state, idx);
     if (sprite_type & 0x80)
         return;  /* No animation for this species */
 
@@ -1676,7 +1677,7 @@ static void handle_pokedex_screen(GameState *state) {
             display_pokedex_scroll_bar_and_cursor(state);
 
             /* Play pokedex music (Music_Pokedex: bank $0F, id $04) */
-            audio_play_music(state->audio, MUSIC_BANK_0F, 0x04);
+            PLAY_MUSIC(state, "pokedex", 0x0F, 0x04);
 
             state->screen_state = 1;
             break;
@@ -1759,7 +1760,7 @@ static void handle_pokedex_screen(GameState *state) {
             }
 
             if (state->pokedex_cursor_was_moved)
-                audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                PLAY_SFX(state, "cursor_move", 0x00, 0x03);
 
             /* A button: play cry for SEEN mons, view description if CAUGHT.
              * ASM (0x280fe): checks any flag set first (PlayCry for all seen),
@@ -1808,7 +1809,7 @@ static void handle_pokedex_screen(GameState *state) {
 
             /* B button: exit */
             if (newly & BTN_B) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->screen_state = 4;
                 break;
             }
@@ -1823,10 +1824,10 @@ static void handle_pokedex_screen(GameState *state) {
                     draw_summary_window_mon_image(state);
                     /* Initialize animation frame durations for this mon */
                     uint8_t mon_idx = state->cur_pokedex_index;
-                    uint8_t stype = get_mon_animated_sprite_type(mon_idx);
+                    uint8_t stype = get_mon_animated_sprite_type(state, mon_idx);
                     state->current_animated_mon_sprite_type = stype;
                     state->current_animated_mon_sprite_frame = stype;
-                    get_catch_sprite_frame_durations_for_mon(mon_idx,
+                    get_catch_sprite_frame_durations_for_mon(state, mon_idx,
                         &state->current_catch_mon_idle_frame1_duration,
                         &state->current_catch_mon_idle_frame2_duration,
                         &state->current_catch_mon_hit_frame_duration);
@@ -1908,7 +1909,7 @@ static void handle_pokedex_screen(GameState *state) {
                     draw_pokedex_mon_names(state);
                     draw_pokedex_numbers(state);
                     update_pokedex_scroll(state);
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     break;
                 }
             } else {
@@ -1921,7 +1922,7 @@ static void handle_pokedex_screen(GameState *state) {
                     draw_pokedex_mon_names(state);
                     draw_pokedex_numbers(state);
                     update_pokedex_scroll(state);
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     break;
                 }
             }
@@ -1932,10 +1933,10 @@ static void handle_pokedex_screen(GameState *state) {
                     state->pokedex_start_button_is_pressed = 0xFF;
                     draw_summary_window_mon_image(state);
                     uint8_t mon_idx = state->cur_pokedex_index;
-                    uint8_t stype = get_mon_animated_sprite_type(mon_idx);
+                    uint8_t stype = get_mon_animated_sprite_type(state, mon_idx);
                     state->current_animated_mon_sprite_type = stype;
                     state->current_animated_mon_sprite_frame = stype;
-                    get_catch_sprite_frame_durations_for_mon(mon_idx,
+                    get_catch_sprite_frame_durations_for_mon(state, mon_idx,
                         &state->current_catch_mon_idle_frame1_duration,
                         &state->current_catch_mon_idle_frame2_duration,
                         &state->current_catch_mon_hit_frame_duration);
@@ -2371,7 +2372,7 @@ static void handle_options_screen(GameState *state) {
             /* Func_c948: initialize key config display in window tilemap */
             init_key_config_display(state);
             /* Play options music (Music_Options: bank $12, id $02) */
-            audio_play_music(state->audio, MUSIC_BANK_12, MUSIC_OPTIONS);
+            PLAY_MUSIC(state, "options", 0x12, 0x02);
             /* Draw initial sound test IDs (Func_c35a lines 40-45) */
             /* hlCoord 7, 11, vBGMap = $9800 + 11*32 + 7 = $9967 */
             redraw_sound_test_id(state, 0x9967, state->sound_test_current_bgm);
@@ -2392,14 +2393,14 @@ static void handle_options_screen(GameState *state) {
                 if (sel < 2) sel++;
             }
             state->options_menu_selection = sel;
-            if (sel != old_sel) audio_play_sfx(state->audio, 0, SFX_CURSOR);
+            if (sel != old_sel) PLAY_SFX(state, "cursor_move", 0x00, 0x03);
 
             /* Func_c43a: animations + faded arrow */
             options_run_animations_with_faded_arrow(state);
 
             /* Func_c447: A button → enter sub-menu */
             if (state->hram.newly_pressed_buttons & BTN_A) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 if (sel == 0) {
                     /* Rumble sub-menu */
                     reset_options_pikachu_psyduck_anim(state);
@@ -2414,7 +2415,7 @@ static void handle_options_screen(GameState *state) {
                     state->screen_state = 5;
                 }
             } else if (state->hram.newly_pressed_buttons & BTN_B) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 /* Exit to title screen */
                 state->screen_state = 2;
             }
@@ -2445,7 +2446,7 @@ static void handle_options_screen(GameState *state) {
                     rum--;
                     state->options_rumble_setting = rum;
                     reset_options_pikachu_psyduck_anim(state);
-                    audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                    PLAY_SFX(state, "cursor_move", 0x00, 0x03);
                 }
             } else if (newly & BTN_RIGHT) {
                 if (rum < 1) {
@@ -2453,7 +2454,7 @@ static void handle_options_screen(GameState *state) {
                     state->options_rumble_setting = rum;
                     state->rumble_pattern = 0;
                     state->rumble_duration = 0;
-                    audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                    PLAY_SFX(state, "cursor_move", 0x00, 0x03);
                 }
             }
 
@@ -2468,7 +2469,7 @@ static void handle_options_screen(GameState *state) {
 
             /* B → clear rumble, return to main menu */
             if (newly & BTN_B) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->rumble_pattern = 0;
                 state->rumble_duration = 0;
                 state->screen_state = 1;
@@ -2493,14 +2494,14 @@ static void handle_options_screen(GameState *state) {
                     if (ksel < 7) ksel++;
                 }
                 state->options_key_config_selection = ksel;
-                if (ksel != old_ksel) audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                if (ksel != old_ksel) PLAY_SFX(state, "cursor_move", 0x00, 0x03);
 
                 /* Func_c554: active arrow (mode 1) */
                 handle_options_active_arrow(state, 1);
 
                 /* Func_c55a: A button actions */
                 if (newly & BTN_A) {
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     if (ksel == 0) {
                         /* Row 0 = "Default" → reset all key configs */
                         save_default_key_configs(state);
@@ -2521,7 +2522,7 @@ static void handle_options_screen(GameState *state) {
                 /* B → save key configs to SRAM, clear sprites, disable window, return.
                  * ASM Func_c506: SaveData for key configs on B-press. */
                 if (newly & BTN_B) {
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     save_game(state);  /* persist key config changes immediately */
                     state->sprite_buffer_size = 0;
                     state->hram.lcdc &= (uint8_t)~0x08;  /* disable window */
@@ -2675,7 +2676,7 @@ static void handle_options_screen(GameState *state) {
                 if (newly & BTN_A) {
                     uint8_t idx = state->sound_test_current_bgm;
                     if (idx < NUM_SONGS) {
-                        audio_play_music(state->audio, 0, 0);  /* MUSIC_NOTHING */
+                        PLAY_MUSIC(state, "nothing", 0x0F, 0x00);  /* MUSIC_NOTHING */
                         state->sound_test_bgm_pending_bank = song_banks[idx].bank;
                         state->sound_test_bgm_pending_id = song_banks[idx].id;
                         state->sound_test_bgm_delay = 3;
@@ -2726,7 +2727,7 @@ static void handle_options_screen(GameState *state) {
              * THEN play SFX. ASM: PlaySong MUSIC_NOTHING, 3x AdvanceFrame,
              * PlaySong MUSIC_OPTIONS, PlaySoundEffect SFX_CONFIRM. */
             if (newly & BTN_B) {
-                audio_play_music(state->audio, 0, 0);  /* MUSIC_NOTHING: stop current music */
+                PLAY_MUSIC(state, "nothing", 0x0F, 0x00);  /* MUSIC_NOTHING: stop current music */
                 /* SFX_CONFIRM is played AFTER the delay in state 6, not here (M8 fix) */
                 state->sound_test_exit_delay = 3;
                 state->screen_state = 6;  /* use state 6 for delay */
@@ -2741,8 +2742,8 @@ static void handle_options_screen(GameState *state) {
                 state->sound_test_exit_delay--;
                 break;
             }
-            audio_play_music(state->audio, MUSIC_BANK_12, MUSIC_OPTIONS);
-            audio_play_sfx(state->audio, 0, SFX_CONFIRM);  /* SFX after delay (M8 fix) */
+            PLAY_MUSIC(state, "options", 0x12, 0x02);
+            PLAY_SFX(state, "confirm", 0x00, 0x01);  /* SFX after delay (M8 fix) */
             state->screen_state = 1;
             break;
         }
@@ -2940,6 +2941,14 @@ static void handle_high_scores_field_switch(GameState *state) {
             const uint16_t *dst_bg = get_high_scores_bg_palettes(target_stage);
             const uint16_t *src_obj = get_high_scores_obj_palettes(target_stage ^ 1);
             const uint16_t *dst_obj = get_high_scores_obj_palettes(target_stage);
+            /* Config palette overrides for high scores */
+            if (state->config && state->config->palettes.palettes_loaded) {
+                /* Config index 4 = high_scores_red, 5 = high_scores_blue */
+                src_bg = state->config->palettes.screens[4 + (target_stage ^ 1)].bg;
+                dst_bg = state->config->palettes.screens[4 + target_stage].bg;
+                src_obj = state->config->palettes.screens[4 + (target_stage ^ 1)].obj;
+                dst_obj = state->config->palettes.screens[4 + target_stage].obj;
+            }
 
             /* Progress fraction: 0 at start (counter=38), 1 at end (counter=0) */
             uint8_t progress = (uint8_t)(0x27 - remaining);
@@ -2981,9 +2990,13 @@ static void handle_high_scores_field_switch(GameState *state) {
                 state->high_scores_stage = 0;
             }
 
-            /* Set final palettes */
+            /* Set final palettes (config override if available) */
             const uint16_t *bg_pals = get_high_scores_bg_palettes(state->high_scores_stage);
             const uint16_t *obj_pals = get_high_scores_obj_palettes(state->high_scores_stage);
+            if (state->config && state->config->palettes.palettes_loaded) {
+                bg_pals = state->config->palettes.screens[4 + state->high_scores_stage].bg;
+                obj_pals = state->config->palettes.screens[4 + state->high_scores_stage].obj;
+            }
             for (int i = 0; i < 8; i++) {
                 for (int c = 0; c < 4; c++) {
                     state->bg_palettes[i].colors[c] = bg_pals[i * 4 + c];
@@ -2998,7 +3011,7 @@ static void handle_high_scores_field_switch(GameState *state) {
     uint8_t newly = state->hram.newly_pressed_buttons;
     if (newly & BTN_RIGHT) {
         if (state->high_scores_stage != 0) return;
-        audio_play_sfx(state->audio, 0, SFX_CURSOR);
+        PLAY_SFX(state, "cursor_move", 0x00, 0x03);
         /* Start Red→Blue animation */
         state->sprite_buffer_size = 0;  /* ClearSpriteBuffer */
         state->hram.wx = 0xa5;
@@ -3009,7 +3022,7 @@ static void handle_high_scores_field_switch(GameState *state) {
         state->high_scores_field_switch_dir = 0;
     } else if (newly & BTN_LEFT) {
         if (state->high_scores_stage == 0) return;
-        audio_play_sfx(state->audio, 0, SFX_CURSOR);
+        PLAY_SFX(state, "cursor_move", 0x00, 0x03);
         /* Start Blue→Red animation */
         state->sprite_buffer_size = 0;  /* ClearSpriteBuffer */
         state->hram.wx = 0x07;
@@ -3177,13 +3190,13 @@ static void handle_high_scores_screen(GameState *state) {
             /* Choose music */
             if (state->high_score_is_entering_name) {
                 if (state->high_score_name_row == 0) {
-                    audio_play_music(state->audio, MUSIC_BANK_13, 0x01); /* End Credits */
+                    PLAY_MUSIC(state, "end_credits", 0x13, 0x01); /* End Credits */
                 } else {
-                    audio_play_music(state->audio, MUSIC_BANK_13, 0x02); /* Name Entry */
+                    PLAY_MUSIC(state, "name_entry", 0x13, 0x02); /* Name Entry */
                 }
                 state->screen_state = 2;  /* Go to name entry */
             } else {
-                audio_play_music(state->audio, MUSIC_BANK_10, MUSIC_HI_SCORE);
+                PLAY_MUSIC(state, "hi_score", 0x10, 0x04);
                 state->screen_state = 3;  /* Go to view mode */
             }
             break;
@@ -3206,14 +3219,14 @@ static void handle_high_scores_screen(GameState *state) {
                 if (c >= 0x38) c = 0x0A;
                 *cur_char = c;
                 update_name_entry_tile(state);
-                audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                PLAY_SFX(state, "cursor_move", 0x00, 0x03);
             } else if (buttons & BTN_LEFT) {
                 uint8_t c = *cur_char;
                 if (c <= 0x09 || c == 0x0A) c = 0x37;
                 else c--;
                 *cur_char = c;
                 update_name_entry_tile(state);
-                audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                PLAY_SFX(state, "cursor_move", 0x00, 0x03);
             }
 
             /* A button: advance column */
@@ -3223,21 +3236,21 @@ static void handle_high_scores_screen(GameState *state) {
                 col++;
                 if (col >= 3) {
                     /* Done entering name */
-                    audio_play_sfx(state->audio, 7, 0x45);
+                    PLAY_SFX(state, "high_scores_enter", 0x07, 0x45);
                     state->high_score_is_entering_name = 0;
                     state->screen_state = 3;
                     break;
                 }
                 state->high_score_name_column = col;
                 state->high_score_name_entry_blink_counter = 0x20;
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
             }
 
             /* B button: go back one column */
             if (newly & BTN_B) {
                 if (state->high_score_name_column > 0) {
                     state->high_score_name_column--;
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                 }
             }
 
@@ -3271,21 +3284,21 @@ static void handle_high_scores_screen(GameState *state) {
                 uint8_t newly = state->hram.newly_pressed_buttons;
                 if (newly & BTN_A) {
                     /* A: exit (inc state twice: 3→5) */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->screen_state = 5;
                 } else if (newly & BTN_B) {
                     /* B: exit (inc state twice: 3→5) */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->screen_state = 5;
                 } else if (newly & BTN_START) {
                     /* Start: go to print/send UI (inc state once: 3→4) */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->screen_state = 4;
                 } else if (state->hram.joypad_state == (BTN_SELECT | BTN_UP) &&
                            (newly & (BTN_SELECT | BTN_UP))) {
                     /* ASM (.asm_ccfb): SELECT+UP held AND at least one newly pressed
                      * → show delete data confirmation dialog */
-                    audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                    PLAY_SFX(state, "confirm", 0x00, 0x01);
                     state->sprite_buffer_size = 0;
                     state->screen_state = 6;  /* delete confirmation sub-state */
                 }
@@ -3301,12 +3314,12 @@ static void handle_high_scores_screen(GameState *state) {
             if (newly & BTN_UP) {
                 if (state->high_scores_print_send_selection > 0) {
                     state->high_scores_print_send_selection--;
-                    audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                    PLAY_SFX(state, "cursor_move", 0x00, 0x03);
                 }
             } else if (newly & BTN_DOWN) {
                 if (state->high_scores_print_send_selection < 1) {
                     state->high_scores_print_send_selection++;
-                    audio_play_sfx(state->audio, 0, SFX_CURSOR);
+                    PLAY_SFX(state, "cursor_move", 0x00, 0x03);
                 }
             }
 
@@ -3325,13 +3338,13 @@ static void handle_high_scores_screen(GameState *state) {
 
             /* A button: acknowledge (non-functional) */
             if (newly & BTN_A) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->screen_state = 3;
             }
 
             /* B button: go back to view mode */
             if (newly & BTN_B) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->screen_state = 3;
             }
             break;
@@ -3361,11 +3374,11 @@ static void handle_high_scores_screen(GameState *state) {
             uint8_t newly = state->hram.newly_pressed_buttons;
             if (newly & BTN_B) {
                 /* Cancel: play SFX, return to view mode */
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->screen_state = 3;
             } else if (newly & BTN_A) {
                 /* Confirm: reset high scores to defaults (CopyInitialHighScores) */
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 reset_high_scores_to_defaults(state);
 
                 /* Reload high score tilemaps (ASM reloads HighScoresTilemap and
@@ -3419,7 +3432,7 @@ static void handle_field_select_screen(GameState *state) {
             state->field_select_blinking_border_frame = 8;
             state->field_select_border_anim_step = 0;
             /* Play field select music (Music_FieldSelect: bank $12, id $03) */
-            audio_play_music(state->audio, MUSIC_BANK_12, MUSIC_FIELD_SELECT);
+            PLAY_MUSIC(state, "field_select", 0x12, 0x03);
             state->screen_state = 1;
             break;
         case 1: {
@@ -3429,17 +3442,17 @@ static void handle_field_select_screen(GameState *state) {
             uint8_t buttons = state->hram.pressed_buttons;
             if ((buttons & BTN_LEFT) && state->selected_field_index > 0) {
                 state->selected_field_index = 0;
-                audio_play_sfx(state->audio, 0, SFX_FIELD_LEFT);
+                PLAY_SFX(state, "field_select_left", 0x00, 0x3C);
             } else if ((buttons & BTN_RIGHT) && state->selected_field_index < 1) {
                 state->selected_field_index = 1;
-                audio_play_sfx(state->audio, 0, SFX_FIELD_RIGHT);
+                PLAY_SFX(state, "field_select_right", 0x00, 0x3D);
             }
 
             animate_field_select_border(state, false);
 
             uint8_t newly = state->hram.newly_pressed_buttons;
             if (newly & (BTN_A | BTN_B)) {
-                audio_play_sfx(state->audio, 0, SFX_CONFIRM);
+                PLAY_SFX(state, "confirm", 0x00, 0x01);
                 state->field_select_pressed_button = newly & (BTN_A | BTN_B);
                 state->field_select_blinking_border_timer = 0x18;
                 state->field_select_blinking_border_frame = 1;

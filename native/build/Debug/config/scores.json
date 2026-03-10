@@ -1,0 +1,78 @@
+{
+    "_comment": "Score values for Pokemon Pinball+. All values are plain integers, converted to BCD internally.",
+
+    "common": {
+        "_comment": "Common score values used across both fields",
+        "score_5": 5,
+        "score_10": 10,
+        "score_100": 100,
+        "score_400": 400,
+        "score_500": 500,
+        "score_5000": 5000,
+        "score_10000": 10000,
+        "score_100000": 100000,
+        "score_300000": 300000,
+        "score_1000000": 1000000,
+        "score_10000000": 10000000
+    },
+
+    "gengar_bonus": {
+        "_comment": "Gengar bonus stage score values",
+        "gastly_hit": 100000,
+        "_comment_gastly": "Points for hitting a Gastly",
+        "haunter_hit": 500000,
+        "_comment_haunter": "Points for hitting a Haunter",
+        "gengar_hit": 5000000,
+        "_comment_gengar": "Points for hitting Gengar",
+        "gravestone": 100,
+        "_comment_gravestone": "Points for collecting a gravestone"
+    },
+
+    "mewtwo_bonus": {
+        "_comment": "Mewtwo bonus stage score values",
+        "mewtwo_hit": 5000000,
+        "_comment_mewtwo": "Points for hitting Mewtwo directly",
+        "orb_hit": 100000,
+        "_comment_orb": "Points for hitting an orbiting ball"
+    },
+
+    "meowth_bonus": {
+        "_comment": "Meowth bonus stage score values",
+        "jewel": 1000,
+        "_comment_jewel": "Points per jewel collected",
+        "meowth_hit": 100000,
+        "_comment_meowth": "Points for hitting Meowth"
+    },
+
+    "diglett_bonus": {
+        "_comment": "Diglett bonus stage score values",
+        "diglett_hit": 100000,
+        "_comment_diglett": "Points per Diglett hit",
+        "dugtrio_hit": 5000000,
+        "_comment_dugtrio": "Points for hitting Dugtrio boss"
+    },
+
+    "seel_bonus": {
+        "_comment": "Seel bonus stage score values",
+        "seel_hit": 100000,
+        "_comment_seel": "Points per Seel hit",
+        "dive_hit": 5000000,
+        "_comment_dive": "Points for dive/boss hit"
+    },
+
+    "jackpots": {
+        "_comment": "Jackpot accumulation values for catch and evolution modes",
+        "catch_voltorb": 10000,
+        "_comment_catch_voltorb": "Added to jackpot when all Voltorb tiles flipped during catch mode",
+        "catch_spinner": 1000,
+        "_comment_catch_spinner": "Added to jackpot per spinner hit during catch mode",
+        "catch_bellsprout": 50000,
+        "_comment_catch_bellsprout": "Added to jackpot per Bellsprout hit during catch mode",
+        "evo_voltorb": 15000,
+        "_comment_evo_voltorb": "Added to jackpot when all Voltorb tiles flipped during evolution mode",
+        "evo_bellsprout": 75000,
+        "_comment_evo_bellsprout": "Added to jackpot per Bellsprout hit during evolution mode",
+        "evo_spinner": 1500,
+        "_comment_evo_spinner": "Added to jackpot per spinner hit during evolution mode"
+    }
+}

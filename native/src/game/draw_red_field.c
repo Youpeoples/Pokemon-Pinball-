@@ -874,16 +874,19 @@ static int handle_scrolling_text(ScrollingText *st, uint8_t *msg_text,
      * ASM PlaceTextLow copies until 0x00 terminator; the ASM text data
      * includes a trailing space before @ that clears the position after
      * the last character.  We replicate this by writing a blank tile (0x81)
-     * after the 20 text tiles, preventing stale chars from lingering. */
+     * after the 20 text tiles, preventing stale chars from lingering.
+     * ASM PlaceTextLow also writes row 1 (+0x80) for commas/blanks. */
     uint8_t src_off = st->source_text_offset;
     uint8_t dst_off = st->message_box_offset;
     int i;
     for (i = 0; i < 20 && (dst_off + i) < 0x60; i++) {
         msg_buffer[dst_off + i] = msg_text[src_off + i];
+        msg_buffer[(dst_off + i) + 0x80] = msg_text[(src_off + i) + 0x80];
     }
     /* Clear trailing position (matches ASM trailing space before @ terminator) */
     if ((dst_off + i) < 0x60) {
         msg_buffer[dst_off + i] = 0x81;
+        msg_buffer[(dst_off + i) + 0x80] = 0x81;
     }
 
     /* Decrement remaining steps (ASM: always decremented, even during pause) */
@@ -904,11 +907,14 @@ static int handle_stationary_text(StationaryText *st, uint8_t *msg_text,
                                   uint8_t *msg_buffer) {
     if (!st->enabled) return 0;
 
-    /* Place text at position */
+    /* Place text at position.
+     * ASM HandleStationaryText calls PlaceTextLow which writes BOTH
+     * row 0 (character tiles) and row 1 (+0x80, commas/blanks). */
     uint8_t src_off = st->source_text_offset;
     uint8_t dst_off = st->message_box_offset;
     for (int i = 0; i < 20 && (dst_off + i) < 0x60; i++) {
         msg_buffer[dst_off + i] = msg_text[src_off + i];
+        msg_buffer[(dst_off + i) + 0x80] = msg_text[(src_off + i) + 0x80];
     }
 
     /* Decrement duration byte-by-byte (ASM HandleStationaryText 0x33c3).
@@ -957,15 +963,17 @@ void update_bottom_text(GameState *state) {
     }
 
     /* Copy buffer to window tilemap.
-     * Row 0: text tiles. Row 1: clear to blank (0x81) to prevent
-     * stale scoreboard comma data from showing through. */
+     * Row 0: text tiles from buffer[0x40+].
+     * Row 1: comma/blank tiles from buffer[0xC0+] (the +0x80 "set 7" row).
+     * ASM PlaceTextLow writes blanks ($81) to row 1 for normal chars and
+     * comma tile ($82) for commas, so row 1 is always properly populated. */
     if (state->vram) {
         for (int i = 0; i < 20; i++) {
             state->vram->win_map[0][i] = state->bottom_message_buffer[0x40 + i];
             state->vram->win_map[1][i] = 0x00;
         }
         for (int i = 0; i < 20; i++) {
-            state->vram->win_map[0][32 + i] = 0x81;  /* blank tile */
+            state->vram->win_map[0][32 + i] = state->bottom_message_buffer[0xC0 + i];
             state->vram->win_map[1][32 + i] = 0x00;
         }
     }

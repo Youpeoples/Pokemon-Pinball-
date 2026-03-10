@@ -16,6 +16,7 @@
  */
 
 #include "game/seel_bonus.h"
+#include "game/config_data.h"
 #include "game/sprite_data.h"
 #include "game/animation.h"
 #include "game/timer.h"
@@ -44,9 +45,7 @@ extern void draw_flipper_sprites(GameState *state);
 #define SEEL_WIN_SCORE           20
 #define SEEL_MUSIC_BANK         0x11
 #define SEEL_MUSIC_ID           0x03
-/* BCD scores */
-static const uint8_t ONE_HUNDRED_THOUSAND[4] = {0x00, 0x00, 0x10, 0x00};
-static const uint8_t FIVE_MILLION[4]         = {0x00, 0x00, 0x00, 0x50};
+/* Score values loaded from config/scores.json */
 
 /*=============================================================================
  * Collision Angle Table — loaded from binary
@@ -516,7 +515,7 @@ static void seel_on_peeking_done(GameState *state, int idx) {
     } else {
         next = 3; /* submerge right */
     }
-    audio_play_sfx(state->audio, 0x00, 0x31);
+    PLAY_SFX(state, "seel_peek", 0x00, 0x31);
     set_seel_anim_state(state, idx, next);
 }
 
@@ -557,7 +556,7 @@ static void seel_on_emerge_right_done(GameState *state, int idx) {
         state->seel_timer[idx] = 3;
     }
     /* ASM: all three streak branches play SFX 0x31 (M10) */
-    audio_play_sfx(state->audio, 0x00, 0x31);
+    PLAY_SFX(state, "seel_peek", 0x00, 0x31);
 }
 
 /* State 3 complete: Submerge right done */
@@ -606,7 +605,7 @@ static void seel_on_emerge_left_done(GameState *state, int idx) {
         state->seel_timer[idx] = 3;
     }
     /* ASM: all three streak branches play SFX 0x31 (M10) */
-    audio_play_sfx(state->audio, 0x00, 0x31);
+    PLAY_SFX(state, "seel_peek", 0x00, 0x31);
 }
 
 /* State 6 complete: Submerge left done */
@@ -742,10 +741,10 @@ static void add_streak_score(GameState *state) {
 
     while (d > 0) {
         if (d >= 0x32) {
-            add_score_with_multiplier(state, FIVE_MILLION);
+            add_score_with_multiplier(state, state->config->scores.seel_dive);
             d -= 0x32;
         } else {
-            add_score_with_multiplier(state, ONE_HUNDRED_THOUSAND);
+            add_score_with_multiplier(state, state->config->scores.seel_hit);
             d--;
         }
     }
@@ -758,11 +757,11 @@ static void play_low_time_sfx(GameState *state) {
     if (state->timer_frames != 0) return;
     if (state->timer_minutes != 0) return;
     if (state->timer_seconds == 32) {
-        audio_play_sfx(state->audio, 0x07, 0x49);
+        PLAY_SFX(state, "countdown_32sec", 0x07, 0x49);
     } else if (state->timer_seconds == 16) {
-        audio_play_sfx(state->audio, 0x0A, 0x4A);
+        PLAY_SFX(state, "countdown_16sec", 0x0A, 0x4A);
     } else if (state->timer_seconds == 5) {
-        audio_play_sfx(state->audio, 0x0D, 0x4B);
+        PLAY_SFX(state, "countdown_5sec", 0x0D, 0x4B);
     }
 }
 
@@ -853,7 +852,7 @@ void init_seel_bonus(GameState *state) {
     start_timer(state, 0x01, 0x30);
 
     /* Play music (Bank $11, MUSIC_SEEL_STAGE = $03) */
-    audio_play_music(state->audio, SEEL_MUSIC_BANK, SEEL_MUSIC_ID);
+    PLAY_MUSIC(state, "seel_stage", 0x11, 0x03);
 }
 
 /*=============================================================================
@@ -961,7 +960,7 @@ void handle_ball_loss_seel_bonus(GameState *state) {
     if (state->seel_completion_state == 0) return;
 
     /* Return to main field */
-    audio_play_sfx(state->audio, 0x00, 0x02);
+    PLAY_SFX(state, "wall_bounce", 0x00, 0x02);
     state->timer_active = 0;
     state->going_to_bonus_stage = 0;
     state->returning_from_bonus_stage = 1;
@@ -1055,7 +1054,7 @@ void resolve_seel_bonus_object_collisions(GameState *state) {
         /* Rumble + SFX */
         state->rumble_pattern = 0x33;
         state->rumble_duration = 0x08;
-        audio_play_sfx(state->audio, 0x00, 0x30);
+        PLAY_SFX(state, "seel_hit", 0x00, 0x30);
 
         /* Add score */
         add_streak_score(state);
@@ -1103,7 +1102,7 @@ void resolve_seel_bonus_object_collisions(GameState *state) {
     /* Check win condition: score >= 20 */
     if (state->seel_stage_score >= SEEL_WIN_SCORE && state->seel_completion_state < 2) {
         state->next_bonus_stage = BONUS_STAGE_ORDER_MEWTWO;
-        audio_play_music(state->audio, 0, 0); /* MUSIC_NOTHING */
+        PLAY_MUSIC(state, "nothing", 0, 0); /* MUSIC_NOTHING */
         state->completed_bonus_stage = 1;
         fill_bottom_message_buffer_with_black_tile(state);
         enable_bottom_text(state);
@@ -1111,13 +1110,13 @@ void resolve_seel_bonus_object_collisions(GameState *state) {
         const uint8_t header[6] = { 5, 0x54, 0x41, 20, 0, 59 };
         load_scrolling_text(state, 2, header, "SEEL STAGE CLEARED");
         state->seel_completion_state = 2;
-        audio_play_sfx(state->audio, 0x4B, 0x2A);
+        PLAY_SFX(state, "bonus_stage_clear", 0x4B, 0x2A);
     }
 
     /* State 2: wait for SFX to finish, then resume music */
     if (state->seel_completion_state == 2) {
         if (state->sfx_timer == 0) {
-            audio_play_music(state->audio, SEEL_MUSIC_BANK, SEEL_MUSIC_ID);
+            PLAY_MUSIC(state, "seel_stage", 0x11, 0x03);
             state->seel_completion_state = 5;
         }
     }

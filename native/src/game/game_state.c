@@ -6,12 +6,16 @@
  */
 
 #include "game/game_state.h"
+#include "game/config_data.h"
 #include <stdlib.h>
 #include <string.h>
 
 GameState *game_state_init(void) {
     GameState *state = calloc(1, sizeof(GameState));
     if (!state) return NULL;
+
+    /* Create config with hardcoded defaults (JSON loading happens later in main.c) */
+    state->config = config_data_create();
 
     game_state_reset(state);
     return state;
@@ -21,6 +25,7 @@ void game_state_reset(GameState *state) {
     /* Save native-only pointers that must survive memset (L11) */
     VirtualVRAM *saved_vram = state->vram;
     AudioEngine *saved_audio = state->audio;
+    ConfigData *saved_config = state->config;
     uint8_t *saved_vwf_font_gfx = state->vwf_font_gfx;
     uint8_t *saved_slot_force_field_data = state->slot_force_field_data;
     char saved_asset_base_path[260];
@@ -32,6 +37,7 @@ void game_state_reset(GameState *state) {
     /* Restore native-only pointers */
     state->vram = saved_vram;
     state->audio = saved_audio;
+    state->config = saved_config;
     state->vwf_font_gfx = saved_vwf_font_gfx;
     state->slot_force_field_data = saved_slot_force_field_data;
     memcpy(state->asset_base_path, saved_asset_base_path, sizeof(state->asset_base_path));
@@ -160,6 +166,7 @@ void reset_high_scores_to_defaults(GameState *state) {
 
 void game_state_free(GameState *state) {
     if (state) {
+        config_data_free(state->config);
         free(state->vwf_font_gfx);
         free(state->slot_force_field_data);
         free(state);

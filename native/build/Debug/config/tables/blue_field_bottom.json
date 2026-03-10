@@ -1,0 +1,109 @@
+{
+    "_comment": "Blue Field Bottom Half - object collision groups for stage 0x5. y_split separates upper and lower sections.",
+    "y_split": 86,
+    "groups": [
+        {
+            "name": "wild_mon",
+            "_comment": "Wild Pokemon encounter zone in the upper center, attribute-gated to tiles 0xD0-0xDF",
+            "x_thresh": 26,
+            "y_thresh": 26,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 255],
+            "objects": [
+                {"id": 27, "x": 80, "y": 64}
+            ]
+        },
+        {
+            "name": "psyduck_poliwag",
+            "_comment": "Psyduck (left) and Poliwag (right) triggers, attribute-gated to tiles 0x5E-0x5F and 0x24-0x25",
+            "x_thresh": 8,
+            "y_thresh": 12,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [94, 95, 36, 37, 255],
+            "objects": [
+                {"id": 17, "x": 34, "y": 62},
+                {"id": 18, "x": 125, "y": 61}
+            ]
+        },
+        {
+            "name": "bonus_multipliers",
+            "_comment": "2 bonus multiplier triggers on left and right, attribute-gated to railing tiles",
+            "x_thresh": 9,
+            "y_thresh": 8,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [86, 89, 88, 87, 28, 90, 91, 92, 93, 29, 255],
+            "objects": [
+                {"id": 15, "x": 44, "y": 32},
+                {"id": 16, "x": 116, "y": 32}
+            ]
+        },
+        {
+            "name": "slot",
+            "_comment": "Slot machine trigger at top center of bottom field",
+            "x_thresh": 4,
+            "y_thresh": 4,
+            "attribute_gated": false,
+            "section": "upper",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 26, "x": 80, "y": 22}
+            ]
+        },
+        {
+            "name": "bumpers",
+            "_comment": "2 bumpers (left and right) in the lower section, attribute-gated to bumper collision tiles",
+            "x_thresh": 6,
+            "y_thresh": 11,
+            "attribute_gated": true,
+            "section": "lower",
+            "collision_attrs": [52, 63, 57, 60, 56, 55, 63, 51, 50, 62, 61, 59, 58, 62, 54, 53, 49, 48, 255],
+            "objects": [
+                {"id": 1, "x": 48, "y": 102},
+                {"id": 2, "x": 111, "y": 102}
+            ]
+        },
+        {
+            "name": "pikachu",
+            "_comment": "2 Pikachu ball saver triggers at the bottom-left and bottom-right drain exits",
+            "x_thresh": 3,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 13, "x": 14, "y": 124},
+                {"id": 14, "x": 146, "y": 124}
+            ]
+        },
+        {
+            "name": "cave_lights",
+            "_comment": "4 CAVE letter lights on the lower left and right sides",
+            "x_thresh": 5,
+            "y_thresh": 3,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 22, "x": 14, "y": 101},
+                {"id": 23, "x": 30, "y": 101},
+                {"id": 24, "x": 130, "y": 101},
+                {"id": 25, "x": 146, "y": 101}
+            ]
+        },
+        {
+            "name": "launch_alley",
+            "_comment": "Ball launch alley trigger on the far right at the bottom",
+            "x_thresh": 8,
+            "y_thresh": 8,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 28, "x": 168, "y": 152}
+            ]
+        }
+    ]
+}

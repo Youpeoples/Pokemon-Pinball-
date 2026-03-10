@@ -19,6 +19,7 @@
 
 #include "game/pinball.h"
 #include "game/tilt.h"
+#include "game/config_data.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "game/joypad.h"
@@ -45,8 +46,7 @@
 #include "renderer/vram.h"
 #include <SDL.h>
 
-/* Gravity constant: ASM ApplyGravityToBall adds $000B per frame */
-#define GRAVITY_FORCE  MAKE_FIXED(0, 0x0B)
+/* Gravity constant: default 0x000B per frame (now configurable via config/physics.json) */
 
 /*
  * Scrolling text headers (from text/scrolling_text.asm).
@@ -209,19 +209,19 @@ static bool update_pause_menu(GameState *state) {
     if (state->hram.newly_pressed_buttons & BTN_UP) {
         if (state->in_game_menu_index > 0) {
             state->in_game_menu_index--;
-            audio_play_sfx(state->audio, 0x00, 0x03);
+            PLAY_SFX(state, "cursor_move", 0x00, 0x03);
         }
     }
     if (state->hram.newly_pressed_buttons & BTN_DOWN) {
         if (state->in_game_menu_index < 1) {
             state->in_game_menu_index++;
-            audio_play_sfx(state->audio, 0x00, 0x03);
+            PLAY_SFX(state, "cursor_move", 0x00, 0x03);
         }
     }
 
     /* A button: confirm selection */
     if (state->hram.newly_pressed_buttons & BTN_A) {
-        audio_play_sfx(state->audio, 0x00, 0x01);
+        PLAY_SFX(state, "confirm", 0x00, 0x01);
         if (state->in_game_menu_index == 0) {
             /* SAVE selected: save game state to file (ASM: SaveData to SRAM).
              * Titlescreen transition happens after cleanup delay completes. */
@@ -241,15 +241,7 @@ static bool update_pause_menu(GameState *state) {
     return true;
 }
 
-/* Maximum velocity: ASM LimitBallVelocity clamps high byte to ±7 */
-#define MAX_VELOCITY_HI  7
-
-/* Stage transition thresholds (from CheckStageTransition 0xece9)
- * ASM: add $10 to ball_y, then cp $18 (up) or cp $b8 (down).
- * So: up when ball_y < $08, down when ball_y >= $a8 (168). */
-#define STAGE_TRANSITION_UP_THRESHOLD     8
-#define STAGE_TRANSITION_DOWN_THRESHOLD   168
-#define STAGE_TRANSITION_Y_OFFSET         0x8800  /* 0x88 pixels in 8.8 */
+/* Velocity and stage transition constants now read from config/physics.json */
 
 /*
  * Apply gravity to ball velocity.
@@ -260,7 +252,7 @@ static void apply_gravity(GameState *state) {
     if (!state->enable_ball_gravity_and_tilt) {
         return;
     }
-    state->ball_y_velocity += (int16_t)GRAVITY_FORCE;
+    state->ball_y_velocity += state->config->physics.gravity;
 }
 
 /*
@@ -268,35 +260,37 @@ static void apply_gravity(GameState *state) {
  * Translated from LimitBallVelocity (0x2180).
  * ASM checks only the high byte: positive cp 8 → cap at 7, negative cp -7 → cap at -7.
  */
-static void limit_velocity_component(int16_t *vel) {
+static void limit_velocity_component(int16_t *vel, int8_t max_hi) {
     int8_t hi = (int8_t)(*vel >> 8);
     if (hi >= 0) {
-        if (hi >= 8) {
-            *vel = (int16_t)(MAX_VELOCITY_HI << 8) | (*vel & 0xFF);
+        if (hi > max_hi) {
+            *vel = (int16_t)(max_hi << 8) | (*vel & 0xFF);
         }
     } else {
-        if (hi < -7) {
-            *vel = (int16_t)((int8_t)(-7) << 8) | (*vel & 0xFF);
+        if (hi < -max_hi) {
+            *vel = (int16_t)((int8_t)(-max_hi) << 8) | (*vel & 0xFF);
         }
     }
 }
 
 static void limit_velocity(GameState *state) {
-    limit_velocity_component(&state->ball_x_velocity);
-    limit_velocity_component(&state->ball_y_velocity);
+    int8_t max_hi = state->config->physics.max_velocity_hi;
+    limit_velocity_component(&state->ball_x_velocity, max_hi);
+    limit_velocity_component(&state->ball_y_velocity, max_hi);
 }
 
 /*
  * AddVelocityToPosition (0x21c3): Clamps large velocities before applying.
  * If high byte >= 5, use $04FF. If high byte <= -4, use -$04FF.
  */
-static void add_velocity_to_position(ufixed8_8 *pos, int16_t vel) {
+static void add_velocity_to_position(ufixed8_8 *pos, int16_t vel,
+                                     int16_t clamp_pos, int16_t clamp_neg) {
     int8_t hi = (int8_t)(vel >> 8);
     int16_t effective_vel;
     if (hi >= 0) {
-        effective_vel = (hi >= 5) ? 0x04FF : vel;
+        effective_vel = (hi >= 5) ? clamp_pos : vel;
     } else {
-        effective_vel = (hi < -4) ? (int16_t)0xFB01 : vel;
+        effective_vel = (hi < -4) ? clamp_neg : vel;
     }
     *pos = (ufixed8_8)((uint16_t)*pos + (uint16_t)effective_vel);
 }
@@ -313,8 +307,10 @@ static void move_ball_position(GameState *state) {
     state->prev_ball_y_pos = state->ball_y_pos;
 
     /* Apply clamped velocity to position */
-    add_velocity_to_position(&state->ball_x_pos, state->ball_x_velocity);
-    add_velocity_to_position(&state->ball_y_pos, state->ball_y_velocity);
+    int16_t clamp_pos = state->config->physics.position_clamp_positive;
+    int16_t clamp_neg = state->config->physics.position_clamp_negative;
+    add_velocity_to_position(&state->ball_x_pos, state->ball_x_velocity, clamp_pos, clamp_neg);
+    add_velocity_to_position(&state->ball_y_pos, state->ball_y_velocity, clamp_pos, clamp_neg);
 
     /* Copy to HRAM equivalents */
     state->hram.ball_x_pos = state->ball_x_pos;
@@ -390,24 +386,25 @@ static void reload_stage_data(GameState *state) {
  */
 static void check_stage_transition(GameState *state) {
     uint8_t ball_y = UFIXED_TO_INT(state->ball_y_pos);
+    const PhysicsConfig *phys = &state->config->physics;
 
     /* ASM CheckStageTransition (0xece9): uses lookup tables for stage transitions.
      * $FF entries mean ball loss (youLose). Valid entries mean stage transition. */
 
     /* Ball moving down (ball_y + $10 >= $B8, i.e. ball_y >= $A8 = 168) */
-    if (ball_y >= STAGE_TRANSITION_DOWN_THRESHOLD) {
+    if (ball_y >= phys->stage_transition_down_y) {
         /* BallMovingDownStageTransitions table */
         switch (state->current_stage) {
             case STAGE_RED_FIELD_TOP:
                 state->current_stage = STAGE_RED_FIELD_BOTTOM;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos -
-                                                 STAGE_TRANSITION_Y_OFFSET);
+                                                 phys->stage_transition_y_offset);
                 reload_stage_data(state);
                 return;
             case STAGE_BLUE_FIELD_TOP:
                 state->current_stage = STAGE_BLUE_FIELD_BOTTOM;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos -
-                                                 STAGE_TRANSITION_Y_OFFSET);
+                                                 phys->stage_transition_y_offset);
                 reload_stage_data(state);
                 return;
             default:
@@ -418,19 +415,19 @@ static void check_stage_transition(GameState *state) {
     }
 
     /* Ball moving up (ball_y + $10 < $18, i.e. ball_y < 8) */
-    if (ball_y < STAGE_TRANSITION_UP_THRESHOLD) {
+    if (ball_y < phys->stage_transition_up_y) {
         /* BallMovingUpStageTransitions table */
         switch (state->current_stage) {
             case STAGE_RED_FIELD_BOTTOM:
                 state->current_stage = STAGE_RED_FIELD_TOP;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos +
-                                                 STAGE_TRANSITION_Y_OFFSET);
+                                                 phys->stage_transition_y_offset);
                 reload_stage_data(state);
                 return;
             case STAGE_BLUE_FIELD_BOTTOM:
                 state->current_stage = STAGE_BLUE_FIELD_TOP;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos +
-                                                 STAGE_TRANSITION_Y_OFFSET);
+                                                 phys->stage_transition_y_offset);
                 reload_stage_data(state);
                 return;
             default:
@@ -506,7 +503,7 @@ static bool check_ball_lost(GameState *state) {
                 }
             }
             /* ASM: lb de, $15, $02 / call PlaySoundEffect (always, even when bit 7 set) */
-            audio_play_sfx(state->audio, 0x15, 0x02);
+            PLAY_SFX(state, "ball_launch_spring", 0x15, 0x02);
             /* ASM: wMoveToNextScreenState = 1 → advance through HandleBallLoss →
              * EndBall → StartBall to reinitialize ball position at launcher. */
             state->move_to_next_screen_state = 1;
@@ -880,7 +877,7 @@ static void pinball_start_ball(GameState *state) {
             state->hram.scx = 0;
             state->flippers_disabled = 0;
             state->ball_type = state->ball_type_backup;
-            audio_play_music(state->audio, 0x0F, 0x01);
+            PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
         } else {
             /* Normal start: ball in launcher area.
              * From InitBallRedField: X=$00A7, Y=$0098 */
@@ -963,7 +960,7 @@ skip_ball_init:
             state->wd610 = 3;
             state->bonus_multiplier_tens_digit = 0;
             state->bonus_multiplier_ones_digit = state->cur_bonus_multiplier;
-            audio_play_music(state->audio, 0x0F, 0x01);
+            PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
         }
     }
 
@@ -1000,7 +997,7 @@ skip_ball_init:
             state->wd610 = 3;
             state->bonus_multiplier_tens_digit = 0;
             state->bonus_multiplier_ones_digit = state->cur_bonus_multiplier;
-            audio_play_music(state->audio, 0x10, 0x01);
+            PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
         }
     }
 
@@ -1175,6 +1172,52 @@ static void pinball_handle_physics(GameState *state) {
     /* Check for in-game menu (ASM: after object collisions, before collision response) */
     if (joypad_is_key_pressed(state, &state->key_config_menu) && !state->in_game_menu_active) {
         open_pause_menu(state);
+    }
+
+    /* DEBUG: Press C to force catch'em mode on a main field stage */
+    {
+        const Uint8 *keys = SDL_GetKeyboardState(NULL);
+        static uint8_t debug_c_prev = 0;
+        uint8_t debug_c_cur = keys[SDL_SCANCODE_C];
+        if (debug_c_cur && !debug_c_prev) {
+            if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
+                start_catchem_mode(state);
+            }
+        }
+        debug_c_prev = debug_c_cur;
+    }
+
+    /* DEBUG: Press V to force evolution mode on a main field stage */
+    {
+        const Uint8 *keys = SDL_GetKeyboardState(NULL);
+        static uint8_t debug_v_prev = 0;
+        uint8_t debug_v_cur = keys[SDL_SCANCODE_V];
+        if (debug_v_cur && !debug_v_prev) {
+            if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
+                /* Ensure at least one party mon (Charmander) so evolution can start */
+                if (state->num_party_mons == 0) {
+                    state->party_mons[0] = 4; /* Charmander */
+                    state->num_party_mons = 1;
+                }
+                start_evolution_mode(state);
+            }
+        }
+        debug_v_prev = debug_v_cur;
+    }
+
+    /* DEBUG: Press B to set 3 pokeballs (triggers slot open → billboard → bonus) */
+    {
+        const Uint8 *keys = SDL_GetKeyboardState(NULL);
+        static uint8_t debug_b_prev = 0;
+        uint8_t debug_b_cur = keys[SDL_SCANCODE_B];
+        if (debug_b_cur && !debug_b_prev) {
+            if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
+                /* Set 3 pokeballs to trigger the natural pokeball→slot→billboard
+                 * →bonus stage flow, rather than bypassing directly. */
+                state->num_pokeballs = 3;
+            }
+        }
+        debug_b_prev = debug_b_cur;
     }
 
     /* 8. Collision response */
@@ -1530,7 +1573,7 @@ static bool process_end_of_ball_bonus(GameState *state) {
         bonus_display_bcd6(buf, state->end_of_ball_bonus_category_score, 0x46);
         bonus_copy_to_vram(state, 0x40, 0x40);
         /* Play counting SFX */
-        audio_play_sfx(state->audio, 0x00, 0x3E);
+        PLAY_SFX(state, "score_tally", 0x00, 0x3E);
         /* Check A button to skip waits */
         if (state->ball_bonus_wait_for_button_press &&
             (state->hram.newly_pressed_buttons & BTN_A)) {
@@ -1620,7 +1663,7 @@ static bool process_end_of_ball_bonus(GameState *state) {
         bonus_display_bcd6(buf, state->end_of_ball_bonus_total_score, 0x86);
         bonus_copy_to_vram(state, 0x80, 0x40);
         /* Play SFX */
-        audio_play_sfx(state->audio, 0x00, 0x3E);
+        PLAY_SFX(state, "score_tally", 0x00, 0x3E);
         /* Check A */
         if (state->ball_bonus_wait_for_button_press &&
             (state->hram.newly_pressed_buttons & BTN_A)) {
@@ -1678,7 +1721,7 @@ static bool process_end_of_ball_bonus(GameState *state) {
         for (int i = 0x80; i < 0xA0; i++) buf[i] = 0x81;
         bonus_display_bcd6(buf, state->score, 0x66);
         bonus_copy_to_vram(state, 0x60, 0x40);
-        audio_play_sfx(state->audio, 0x00, 0x3E);
+        PLAY_SFX(state, "score_tally", 0x00, 0x3E);
         /* Check A */
         if (state->ball_bonus_wait_for_button_press &&
             (state->hram.newly_pressed_buttons & BTN_A)) {
@@ -1736,7 +1779,7 @@ static bool process_end_of_ball_bonus(GameState *state) {
 
     case EOBB_GAME_OVER:
         /* Play game over music: Bank(Music_GameOver)=0x10, MUSIC_GAME_OVER=0x05 */
-        audio_play_music(state->audio, 0x10, 0x05);
+        PLAY_MUSIC(state, "game_over", 0x10, 0x05);
         /* Clear and place "GAME OVER" text */
         memset(buf, 0x81, 0x40);
         bonus_place_text(buf, 0x20, "     GAME  OVER     ");
@@ -1785,7 +1828,7 @@ static void pinball_handle_ball_loss(GameState *state) {
     if (state->ball_loss_sfx_delay > 0) {
         state->ball_loss_sfx_delay--;
         if (state->ball_loss_sfx_delay == 0) {
-            audio_play_sfx(state->audio, 0x25, 0x24);  /* Ball loss SFX */
+            PLAY_SFX(state, "ball_loss", 0x25, 0x24);  /* Ball loss SFX */
         }
     }
 

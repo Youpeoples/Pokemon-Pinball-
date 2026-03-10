@@ -56,3 +56,9 @@ add_custom_command(TARGET game POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/../data" "$<TARGET_FILE_DIR:game>/data"
 )
+
+# Copy config/ directory (JSON mod configs) next to executable
+add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/../config" "$<TARGET_FILE_DIR:game>/config"
+)

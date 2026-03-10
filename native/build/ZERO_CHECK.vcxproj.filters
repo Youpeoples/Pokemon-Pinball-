@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CustomBuild Include="C:\Users\ville\Documents\GitHub\Comp Proj\native\build\CMakeFiles\50587dae7085eadf247a77b0d7761cae\generate.stamp.rule">
+    <CustomBuild Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\CMakeFiles\82369c783b695f1f9789114f16394116\generate.stamp.rule">
       <Filter>CMake Rules</Filter>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CMake Rules">
-      <UniqueIdentifier>{BDD673CB-2873-3D2F-AD83-EAD0BA742E49}</UniqueIdentifier>
+      <UniqueIdentifier>{235EE1AE-4E5D-36BF-9656-1DAA773822BB}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

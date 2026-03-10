@@ -175,12 +175,14 @@ void load_scrolling_text_with_bcd_public(GameState *state, int slot_index,
  * Used by pokedex screen to animate mon image when Start is pressed.
  *===========================================================================*/
 
-/* Get animated sprite type for a pokemon (0xFF = no animation, bit 7 set) */
-uint8_t get_mon_animated_sprite_type(uint8_t pokedex_index);
+/* Get animated sprite type for a pokemon (0xFF = no animation, bit 7 set).
+ * Reads from config/pokemon.json if loaded, else falls back to hardcoded data. */
+uint8_t get_mon_animated_sprite_type(GameState *state, uint8_t pokedex_index);
 
 /* Get catch sprite frame durations for a pokemon's animated sprite.
- * Returns idle1, idle2, hit frame durations for the animation. */
-void get_catch_sprite_frame_durations_for_mon(uint8_t pokedex_index,
+ * Returns idle1, idle2, hit frame durations for the animation.
+ * Reads from config/pokemon.json if loaded, else falls back to hardcoded data. */
+void get_catch_sprite_frame_durations_for_mon(GameState *state, uint8_t pokedex_index,
                                                uint8_t *idle1, uint8_t *idle2,
                                                uint8_t *hit);
 

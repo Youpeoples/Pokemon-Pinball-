@@ -1,0 +1,121 @@
+{
+    "_comment": "Red Field Bottom Half - object collision groups for stage 0x1. y_split separates upper and lower sections.",
+    "y_split": 86,
+    "groups": [
+        {
+            "name": "wild_mon",
+            "_comment": "Wild Pokemon encounter zone in the upper center, attribute-gated to tiles 0xD0-0xDF",
+            "x_thresh": 26,
+            "y_thresh": 26,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 255],
+            "objects": [
+                {"id": 30, "x": 80, "y": 64}
+            ]
+        },
+        {
+            "name": "bottom_staryu",
+            "_comment": "Staryu trigger at top of bottom field, attribute-gated to tiles 0x56, 0x5B, 0x5C",
+            "x_thresh": 8,
+            "y_thresh": 6,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [86, 91, 92, 255],
+            "objects": [
+                {"id": 26, "x": 64, "y": 8}
+            ]
+        },
+        {
+            "name": "diglett",
+            "_comment": "2 Diglett triggers on left and right sides of upper section",
+            "x_thresh": 8,
+            "y_thresh": 12,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [100, 101, 104, 105, 255],
+            "objects": [
+                {"id": 1, "x": 32, "y": 64},
+                {"id": 2, "x": 128, "y": 64}
+            ]
+        },
+        {
+            "name": "bonus_multipliers",
+            "_comment": "2 bonus multiplier triggers on left and right, attribute-gated to railing tiles",
+            "x_thresh": 7,
+            "y_thresh": 7,
+            "attribute_gated": true,
+            "section": "upper",
+            "collision_attrs": [76, 75, 72, 71, 77, 74, 255],
+            "objects": [
+                {"id": 33, "x": 44, "y": 32},
+                {"id": 34, "x": 116, "y": 32}
+            ]
+        },
+        {
+            "name": "slot",
+            "_comment": "Slot machine trigger at top center of bottom field",
+            "x_thresh": 4,
+            "y_thresh": 4,
+            "attribute_gated": false,
+            "section": "upper",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 32, "x": 80, "y": 22}
+            ]
+        },
+        {
+            "name": "bumpers",
+            "_comment": "2 bumpers (left and right) in the lower section, attribute-gated to bumper collision tiles",
+            "x_thresh": 6,
+            "y_thresh": 11,
+            "attribute_gated": true,
+            "section": "lower",
+            "collision_attrs": [50, 63, 55, 60, 52, 49, 62, 54, 59, 61, 255],
+            "objects": [
+                {"id": 6, "x": 48, "y": 102},
+                {"id": 7, "x": 111, "y": 102}
+            ]
+        },
+        {
+            "name": "pikachu",
+            "_comment": "2 Pikachu ball saver triggers at the bottom-left and bottom-right drain exits",
+            "x_thresh": 3,
+            "y_thresh": 5,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 28, "x": 14, "y": 124},
+                {"id": 29, "x": 146, "y": 124}
+            ]
+        },
+        {
+            "name": "cave_lights",
+            "_comment": "4 CAVE letter lights on the lower left and right sides",
+            "x_thresh": 5,
+            "y_thresh": 3,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 10, "x": 14, "y": 101},
+                {"id": 11, "x": 30, "y": 101},
+                {"id": 12, "x": 130, "y": 101},
+                {"id": 13, "x": 146, "y": 101}
+            ]
+        },
+        {
+            "name": "launch_alley",
+            "_comment": "Ball launch alley trigger on the far right at the bottom",
+            "x_thresh": 8,
+            "y_thresh": 8,
+            "attribute_gated": false,
+            "section": "lower",
+            "collision_attrs": [],
+            "objects": [
+                {"id": 8, "x": 168, "y": 152}
+            ]
+        }
+    ]
+}

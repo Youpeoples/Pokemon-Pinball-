@@ -10,6 +10,7 @@
  */
 
 #include "game/flippers.h"
+#include "game/config_data.h"
 #include "game/joypad.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
@@ -17,16 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FLIPPER_DELTA  0x0333
-#define FLIPPER_MAX    0x0F00
-
-/* FlipperRadiusMagnitudes from flippers.asm (0xe538): 32 words */
-static const uint16_t FlipperRadiusMagnitudes[32] = {
-    0x0000, 0x000C, 0x001C, 0x0030, 0x0038, 0x0048, 0x005C, 0x006C,
-    0x0070, 0x0080, 0x0094, 0x00A4, 0x00B4, 0x00C4, 0x00D4, 0x00E4,
-    0x00F8, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC,
-    0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC, 0x00FC,
-};
+/* Flipper constants now read from config/physics.json via state->config->physics */
 
 /* Flipper collision data loaded from binary files */
 static uint8_t *flipper_radii[2] = { NULL, NULL };       /* Bank 0, Bank 1 */
@@ -71,16 +63,20 @@ void free_flipper_collision_data(void) {
  * Read input, update flipper angular positions with delta ±0x0333/frame.
  */
 static void update_flipper_states(GameState *state) {
+    const PhysicsConfig *phys = &state->config->physics;
+    uint16_t flipper_delta = phys->flipper_delta;
+    uint16_t flipper_max = phys->flipper_max;
+
     /* Save previous states (high byte only) */
     state->previous_left_flipper_state = (uint8_t)(state->left_flipper_state >> 8);
     state->previous_right_flipper_state = (uint8_t)(state->right_flipper_state >> 8);
 
     /* Left flipper */
     {
-        int16_t delta = -(int16_t)FLIPPER_DELTA;
+        int16_t delta = -(int16_t)flipper_delta;
         if (joypad_is_key_held(state, &state->key_config_left_flipper) &&
             !state->flippers_disabled) {
-            delta = (int16_t)FLIPPER_DELTA;
+            delta = (int16_t)flipper_delta;
         }
 
         uint8_t hi = (uint8_t)(state->left_flipper_state >> 8);
@@ -90,7 +86,7 @@ static void update_flipper_states(GameState *state) {
 
         int32_t new_state = (int32_t)state->left_flipper_state + delta;
         if (new_state < 0) new_state = 0;
-        if (new_state > FLIPPER_MAX) new_state = FLIPPER_MAX;
+        if (new_state > (int32_t)flipper_max) new_state = (int32_t)flipper_max;
 
         state->left_flipper_state_change = (uint16_t)delta;
         state->left_flipper_state = (uint16_t)new_state;
@@ -98,10 +94,10 @@ static void update_flipper_states(GameState *state) {
 
     /* Right flipper */
     {
-        int16_t delta = -(int16_t)FLIPPER_DELTA;
+        int16_t delta = -(int16_t)flipper_delta;
         if (joypad_is_key_held(state, &state->key_config_right_flipper) &&
             !state->flippers_disabled) {
-            delta = (int16_t)FLIPPER_DELTA;
+            delta = (int16_t)flipper_delta;
         }
 
         uint8_t hi = (uint8_t)(state->right_flipper_state >> 8);
@@ -110,7 +106,7 @@ static void update_flipper_states(GameState *state) {
 
         int32_t new_state = (int32_t)state->right_flipper_state + delta;
         if (new_state < 0) new_state = 0;
-        if (new_state > FLIPPER_MAX) new_state = FLIPPER_MAX;
+        if (new_state > (int32_t)flipper_max) new_state = (int32_t)flipper_max;
 
         state->right_flipper_state_change = (uint16_t)delta;
         state->right_flipper_state = (uint16_t)new_state;
@@ -133,14 +129,16 @@ static int read_flipper_collision_attributes(
     uint8_t ball_x_hi, uint8_t ball_y_hi,
     uint8_t prev_state, uint8_t cur_state)
 {
-    /* Check if ball is in flipper range */
-    if (ball_x_hi < 43) return 0;
-    int x_offset = ball_x_hi - 43;
-    if (x_offset >= 48) return 0;
+    const PhysicsConfig *phys = &state->config->physics;
 
-    if (ball_y_hi < 123) return 0;
-    int y_offset = ball_y_hi - 123;
-    if (y_offset >= 32) return 0;
+    /* Check if ball is in flipper range */
+    if (ball_x_hi < phys->flipper_collision_x_min) return 0;
+    int x_offset = ball_x_hi - phys->flipper_collision_x_min;
+    if (x_offset >= phys->flipper_collision_x_range) return 0;
+
+    if (ball_y_hi < phys->flipper_collision_y_min) return 0;
+    int y_offset = ball_y_hi - phys->flipper_collision_y_min;
+    if (y_offset >= phys->flipper_collision_y_range) return 0;
 
     /* Walk from previous state to current state */
     uint8_t check_state = prev_state;
@@ -262,7 +260,7 @@ static void handle_flipper_collision(GameState *state) {
     uint8_t radius = state->hram.flipper_collision_radius;
     uint16_t magnitude = 0;
     if (radius < 32) {
-        magnitude = FlipperRadiusMagnitudes[radius];
+        magnitude = state->config->physics.flipper_radius_magnitudes[radius];
     }
 
     /* Get state change and multiply by 4 */
@@ -304,7 +302,7 @@ void handle_flippers(GameState *state) {
     if (!state->flippers_disabled) {
         if (joypad_is_key_pressed(state, &state->key_config_left_flipper) ||
             joypad_is_key_pressed(state, &state->key_config_right_flipper)) {
-            audio_play_sfx(state->audio, 0x00, 0x0C);
+            PLAY_SFX(state, "flipper", 0x00, 0x0C);
         }
     }
 

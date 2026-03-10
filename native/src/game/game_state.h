@@ -7,6 +7,7 @@
 /* Forward declarations */
 typedef struct VirtualVRAM VirtualVRAM;
 typedef struct AudioEngine AudioEngine;
+typedef struct ConfigData ConfigData;
 
 /*=============================================================================
  * HRAM State
@@ -304,8 +305,9 @@ typedef struct GameState {
 
     /* Catch'em mode */
     uint8_t current_catchem_mon;
-    uint8_t wd558;                   /* Backup staryu alley indicator state */
-    uint8_t wd559;                   /* Backup bellsprout indicator state */
+    uint8_t wd558;                   /* Backup indicator state (red:[2], blue:[0]) */
+    uint8_t wd559;                   /* Backup indicator state ([3] for both) */
+    uint8_t indicator_state_2_backup; /* Blue field only: backup of indicators[2] */
 
     /* Timer */
     uint8_t timer_seconds;
@@ -825,6 +827,9 @@ typedef struct GameState {
     /* --- Slot force field data (loaded from ball_physics_f0000.bin, 9216 bytes) --- */
     uint8_t *slot_force_field_data;
     size_t slot_force_field_data_size;
+
+    /* --- External config data (not in original GBC) --- */
+    ConfigData *config;             /* JSON-loaded config (physics, scores, tables, pokemon) */
 
     /* --- Native renderer state (not in original GBC) --- */
     VirtualVRAM *vram;              /* Virtual VRAM for tile/map data */
