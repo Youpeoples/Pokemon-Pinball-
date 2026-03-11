@@ -20,6 +20,7 @@
 #include "game/pinball.h"
 #include "game/tilt.h"
 #include "game/config_data.h"
+#include "game/scripting.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "game/joypad.h"
@@ -461,6 +462,9 @@ static bool check_ball_lost(GameState *state) {
      * - RED/BLUE_FIELD_TOP going up
      * - All bonus stages going up or down */
     if (!state->ball_lost_from_transition) return false;
+    printf("[BALL_LOST] ball_lost_from_transition! stage=0x%02X ball_y=0x%04X slot_counter=%d roulette=%d\n",
+        state->current_stage, state->ball_y_pos, state->slot_enter_or_exit_counter, state->slot_roulette_active);
+    fflush(stdout);
     state->ball_lost_from_transition = 0;
 
     /* Bonus stage ball loss: dispatch to stage-specific handler.
@@ -551,6 +555,30 @@ static bool check_ball_lost(GameState *state) {
     /* ASM: ld a, $1 / ld [wMoveToNextScreenState], a */
     state->move_to_next_screen_state = 1;
     return true;
+}
+
+/*
+ * Helper: dispatch draw_sprites for the current stage.
+ * Checks Lua hook first, falls back to C per-stage draw functions.
+ */
+static void dispatch_draw_sprites(GameState *state) {
+    if (state->script_engine && state->script_engine->has_on_draw_sprites) {
+        script_call_on_draw_sprites(state->script_engine, state->current_stage);
+    } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
+        draw_red_field_sprites(state);
+    } else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
+        draw_blue_field_sprites(state);
+    } else if (state->current_stage == STAGE_GENGAR_BONUS) {
+        draw_gengar_bonus_sprites(state);
+    } else if (state->current_stage == STAGE_MEWTWO_BONUS) {
+        draw_mewtwo_bonus_sprites(state);
+    } else if (state->current_stage == STAGE_MEOWTH_BONUS) {
+        draw_meowth_bonus_sprites(state);
+    } else if (state->current_stage == STAGE_DIGLETT_BONUS) {
+        draw_diglett_bonus_sprites(state);
+    } else if (state->current_stage == STAGE_SEEL_BONUS) {
+        draw_seel_bonus_sprites(state);
+    }
 }
 
 /*
@@ -771,8 +799,25 @@ static void pinball_load_gfx(GameState *state) {
         state->wd580 = 0;
     }
 
-    /* Stage-specific initialization (ASM: CallTable_8348 dispatch) */
-    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
+    printf("[LOAD_GFX] stage=0x%02X loading_saved=%d\n", state->current_stage, state->loading_saved_game);
+    fflush(stdout);
+
+    /* Try to load Lua table scripts for this stage */
+    if (state->script_engine) {
+        printf("[LOAD_GFX] Loading Lua scripts for stage 0x%02X...\n", state->current_stage);
+        fflush(stdout);
+        script_load_table_for_stage(state->script_engine, state->current_stage);
+        printf("[LOAD_GFX] Lua scripts loaded. has_on_stage_init=%d\n",
+            state->script_engine->has_on_stage_init);
+        fflush(stdout);
+    }
+
+    /* Stage-specific initialization: Lua hook or C fallback */
+    printf("[LOAD_GFX] Stage init dispatch for 0x%02X...\n", state->current_stage);
+    fflush(stdout);
+    if (state->script_engine && state->script_engine->has_on_stage_init) {
+        script_call_on_stage_init(state->script_engine, state->current_stage);
+    } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
         init_red_field(state);
     } else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
         init_blue_field(state);
@@ -794,6 +839,8 @@ static void pinball_load_gfx(GameState *state) {
     }
 
 skip_stage_init:
+    printf("[LOAD_GFX] Stage init complete. Filling bottom msg, advancing state.\n");
+    fflush(stdout);
     fill_bottom_message_buffer_with_black_tile(state);
     state->audio_engine_enabled = 1;
     state->draw_bottom_message_box = 1;
@@ -862,7 +909,10 @@ static void pinball_start_ball(GameState *state) {
         goto skip_ball_init;
     }
 
-    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
+    /* Stage-specific ball init: Lua hook or C fallback */
+    if (state->script_engine && state->script_engine->has_on_ball_init) {
+        script_call_on_ball_init(state->script_engine, state->current_stage);
+    } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
         if (state->returning_from_bonus_stage) {
             /* StartBallAfterBonusStageRedField (ASM line 72-95):
              * Position at top of field, clear flags, restore ball type, restart music.
@@ -910,9 +960,13 @@ skip_ball_init:
     /* Load stage assets into VRAM (ASM: done in InitBallForStage → _LoadStageData).
      * Guarded by gfx_loaded to avoid redundant PNG loading on normal ball loss. */
     if (state->vram && !state->gfx_loaded) {
+        printf("[START_BALL] Loading stage assets for 0x%02X...\n", state->current_stage);
+        fflush(stdout);
         load_stage_assets(state->current_stage, state->vram,
                           state, state->asset_base_path);
         state->gfx_loaded = 1;
+        printf("[START_BALL] Stage assets loaded.\n");
+        fflush(stdout);
     }
 
     /* Load flipper collision data if on a bottom stage */
@@ -1032,21 +1086,7 @@ skip_ball_init:
     /* Clear sprite buffer and draw initial sprites (ASM lines 53-54) */
     memset(state->sprite_buffer, 0, sizeof(state->sprite_buffer));
     state->sprite_buffer_size = 0;
-    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
-        draw_red_field_sprites(state);
-    } else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
-        draw_blue_field_sprites(state);
-    } else if (state->current_stage == STAGE_GENGAR_BONUS) {
-        draw_gengar_bonus_sprites(state);
-    } else if (state->current_stage == STAGE_MEWTWO_BONUS) {
-        draw_mewtwo_bonus_sprites(state);
-    } else if (state->current_stage == STAGE_MEOWTH_BONUS) {
-        draw_meowth_bonus_sprites(state);
-    } else if (state->current_stage == STAGE_DIGLETT_BONUS) {
-        draw_diglett_bonus_sprites(state);
-    } else if (state->current_stage == STAGE_SEEL_BONUS) {
-        draw_seel_bonus_sprites(state);
-    }
+    dispatch_draw_sprites(state);
 
     /* ASM: SetAllPalettesWhite + EnableLCD + FadeIn (16 frames) before advancing.
      * Set fade palettes to white ($7FFF), start 16-frame fade-in toward target palettes.
@@ -1083,20 +1123,7 @@ static void pinball_handle_physics(GameState *state) {
     /* Pause menu blocks physics while active (ASM: HandleInGameMenu blocks in loop) */
     if (update_pause_menu(state)) {
         /* Still draw sprites while paused */
-        if (state->current_stage <= STAGE_RED_FIELD_BOTTOM)
-            draw_red_field_sprites(state);
-        else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM)
-            draw_blue_field_sprites(state);
-        else if (state->current_stage == STAGE_GENGAR_BONUS)
-            draw_gengar_bonus_sprites(state);
-        else if (state->current_stage == STAGE_MEWTWO_BONUS)
-            draw_mewtwo_bonus_sprites(state);
-        else if (state->current_stage == STAGE_MEOWTH_BONUS)
-            draw_meowth_bonus_sprites(state);
-        else if (state->current_stage == STAGE_DIGLETT_BONUS)
-            draw_diglett_bonus_sprites(state);
-        else if (state->current_stage == STAGE_SEEL_BONUS)
-            draw_seel_bonus_sprites(state);
+        dispatch_draw_sprites(state);
         return;
     }
 
@@ -1145,28 +1172,77 @@ static void pinball_handle_physics(GameState *state) {
      * ASM: CheckGameObjectCollisions (0x2720) wrapper sets wTriggeredGameObject=$FF
      * before dispatch and copies to wPreviousTriggeredGameObject after CHECK but
      * before RESOLVE. Red/blue field handle init+copy internally in their check
-     * functions. Diglett bonus handles it in check_diglett_bonus_object_collisions. */
+     * functions. Diglett bonus handles it in check_diglett_bonus_object_collisions.
+     *
+     * Lua hook: on_object_collision replaces BOTH check and resolve for the stage.
+     * The C check functions do bounding-box detection; the resolve functions handle
+     * game logic responses. A Lua script handles both in one callback. */
+    /* Split check/resolve: C always runs the check phase (sets which_* flags),
+     * then Lua handles resolve if on_object_collision is defined, else C resolves.
+     * For bonus stages, Lua replaces both check+resolve if the hook exists. */
     if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
         check_red_field_object_collisions(state);
-        resolve_red_field_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            resolve_red_field_object_collisions(state);
+        }
     } else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
         check_blue_field_object_collisions(state);
-        resolve_blue_field_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            resolve_blue_field_object_collisions(state);
+        }
     } else if (state->current_stage == STAGE_GENGAR_BONUS) {
-        check_gengar_bonus_object_collisions(state);
-        resolve_gengar_bonus_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            check_gengar_bonus_object_collisions(state);
+            resolve_gengar_bonus_object_collisions(state);
+        }
     } else if (state->current_stage == STAGE_MEWTWO_BONUS) {
-        check_mewtwo_bonus_object_collisions(state);
-        resolve_mewtwo_bonus_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            check_mewtwo_bonus_object_collisions(state);
+            resolve_mewtwo_bonus_object_collisions(state);
+        }
     } else if (state->current_stage == STAGE_MEOWTH_BONUS) {
-        check_meowth_bonus_object_collisions(state);
-        resolve_meowth_bonus_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            check_meowth_bonus_object_collisions(state);
+            resolve_meowth_bonus_object_collisions(state);
+        }
     } else if (state->current_stage == STAGE_DIGLETT_BONUS) {
-        check_diglett_bonus_object_collisions(state);
-        resolve_diglett_bonus_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            check_diglett_bonus_object_collisions(state);
+            resolve_diglett_bonus_object_collisions(state);
+        }
     } else if (state->current_stage == STAGE_SEEL_BONUS) {
-        check_seel_bonus_object_collisions(state);
-        resolve_seel_bonus_object_collisions(state);
+        if (state->script_engine && state->script_engine->has_on_object_collision) {
+            script_call_on_object_collision(state->script_engine,
+                                            state->current_stage,
+                                            state->ball_x_pos, state->ball_y_pos);
+        } else {
+            check_seel_bonus_object_collisions(state);
+            resolve_seel_bonus_object_collisions(state);
+        }
     }
 
     /* Check for in-game menu (ASM: after object collisions, before collision response) */
@@ -1266,20 +1342,7 @@ static void pinball_handle_physics(GameState *state) {
     check_ball_lost(state);
 
     /* 11. Draw sprites */
-    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM)
-        draw_red_field_sprites(state);
-    else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM)
-        draw_blue_field_sprites(state);
-    else if (state->current_stage == STAGE_GENGAR_BONUS)
-        draw_gengar_bonus_sprites(state);
-    else if (state->current_stage == STAGE_MEWTWO_BONUS)
-        draw_mewtwo_bonus_sprites(state);
-    else if (state->current_stage == STAGE_MEOWTH_BONUS)
-        draw_meowth_bonus_sprites(state);
-    else if (state->current_stage == STAGE_DIGLETT_BONUS)
-        draw_diglett_bonus_sprites(state);
-    else if (state->current_stage == STAGE_SEEL_BONUS)
-        draw_seel_bonus_sprites(state);
+    dispatch_draw_sprites(state);
 
     /* 12. ASM frame order (lines 152-166):
      *   UpdateBottomText              (always)
@@ -1870,20 +1933,7 @@ static void pinball_handle_ball_loss(GameState *state) {
     }
 
     /* Draw sprites (ASM calls DrawSpritesForStage here) */
-    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM)
-        draw_red_field_sprites(state);
-    else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM)
-        draw_blue_field_sprites(state);
-    else if (state->current_stage == STAGE_GENGAR_BONUS)
-        draw_gengar_bonus_sprites(state);
-    else if (state->current_stage == STAGE_MEWTWO_BONUS)
-        draw_mewtwo_bonus_sprites(state);
-    else if (state->current_stage == STAGE_MEOWTH_BONUS)
-        draw_meowth_bonus_sprites(state);
-    else if (state->current_stage == STAGE_DIGLETT_BONUS)
-        draw_diglett_bonus_sprites(state);
-    else if (state->current_stage == STAGE_SEEL_BONUS)
-        draw_seel_bonus_sprites(state);
+    dispatch_draw_sprites(state);
 
     /* Update bottom text + process score queue (ASM calls both) */
     update_bottom_text(state);
@@ -1891,6 +1941,10 @@ static void pinball_handle_ball_loss(GameState *state) {
 
     /* Wait for bottom text to finish scrolling */
     if (state->bottom_text_enabled) return;
+
+    printf("[BALL_LOSS] Text done. stage=0x%02X lost_ball=%d extra_ball=%d going_bonus=%d\n",
+        state->current_stage, state->lost_ball, state->extra_ball_state, state->going_to_bonus_stage);
+    fflush(stdout);
 
     /* Bonus stages: skip EndOfBallBonus, go straight to EndBall */
     if (state->current_stage >= FIRST_BONUS_STAGE) {
@@ -1949,6 +2003,9 @@ static void pinball_end_ball(GameState *state) {
     }
 
     if (state->going_to_bonus_stage) {
+        printf("[END_BALL] Going to bonus! cur_stage=0x%02X next_stage=0x%02X\n",
+            state->current_stage, state->next_stage);
+        fflush(stdout);
         /* ASM lines 251-276: backup stage, set bonus stage, stop music */
         state->current_stage_backup = state->current_stage;
         state->stage_collision_state_backup = state->stage_collision_state;
@@ -1959,6 +2016,9 @@ static void pinball_end_ball(GameState *state) {
         audio_stop_all(state->audio);  /* Stop music */
         state->gfx_loaded = 0;
         state->screen_state = 0;  /* LoadGFX for bonus stage */
+        printf("[END_BALL] Bonus transition complete. screen_state=0, stage=0x%02X\n",
+            state->current_stage);
+        fflush(stdout);
         return;
     }
 
@@ -1983,6 +2043,16 @@ void handle_pinball_game(GameState *state) {
      * HandlePinballGame (0xD853):
      * Dispatch via wScreenState jump table.
      */
+    /* DEBUG: log state transitions */
+    static uint8_t prev_screen_state = 0xFF;
+    if (state->screen_state != prev_screen_state) {
+        printf("[PINBALL] screen_state: %d -> %d (stage=0x%02X going_bonus=%d ret_bonus=%d lost=%d)\n",
+            prev_screen_state, state->screen_state, state->current_stage,
+            state->going_to_bonus_stage, state->returning_from_bonus_stage, state->lost_ball);
+        fflush(stdout);
+        prev_screen_state = state->screen_state;
+    }
+
     switch (state->screen_state) {
         case 0: pinball_load_gfx(state); break;
         case 1: pinball_start_ball(state); break;

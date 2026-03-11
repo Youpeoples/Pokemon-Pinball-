@@ -296,13 +296,13 @@ static const int8_t bumper_angle_deltas[] = { -8, 8 };
 
 /* Forward declarations for graphics loading (defined after resolve handlers) */
 static void play_low_time_sfx(GameState *state);
-static void load_staryu_graphics_bottom(GameState *state);
-static void load_upgrade_triggers_graphics(GameState *state);
+void load_staryu_graphics_bottom(GameState *state);
+void load_upgrade_triggers_graphics(GameState *state);
 void load_pokeball_indicator_graphics(GameState *state);
-static void update_field_structures(GameState *state);
+void update_field_structures(GameState *state);
 bool check_special_mode_collision(GameState *state, uint8_t collision_id);
-static void load_staryu_graphics_top(GameState *state);
-static void update_spinner_charge_graphics(GameState *state);
+void load_staryu_graphics_top(GameState *state);
+void update_spinner_charge_graphics(GameState *state);
 static void load_catch_progress_gfx(GameState *state, uint8_t hit_count);
 /* These are now non-static (shared with blue field, declared in red_field.h) */
 static void do_slot_logic_red_field(GameState *state);
@@ -1108,6 +1108,33 @@ static const char * const MAP_NAMES[18] = {
     "INDIGO PLATEAU",     /* 17 */
 };
 
+/* EvolutionFailedText header: scrolling_text_normal 2, 20, 0, 19
+ * → scrolling_text 5, 20, 2, 20, 0, 19 → { 5, 0x54, 0x42, 20, 0x00, 57 } */
+static const uint8_t EVOLUTION_FAILED_HEADER[6] = { 5, 0x54, 0x42, 20, 0x00, 57 };
+
+/* "IT EVOLVED INTO A " — scrolling_text_nopause 5, 38 */
+static const uint8_t IT_EVOLVED_A_HEADER[6] = { 5, 0x54, 0, 0, 0, 38 };
+/* "IT EVOLVED INTO AN " — scrolling_text_nopause 5, 39 */
+static const uint8_t IT_EVOLVED_AN_HEADER[6] = { 5, 0x54, 0, 0, 0, 39 };
+/* Evolved mon name (consonant prefix): scrolling_text 5, 38, 0, 20, 2, 17
+ * → { 5, 0x66, 0x40, 20, 0x20, 75 } */
+static const uint8_t EVO_NAME_CONSONANT_HEADER[6] = { 5, 0x66, 0x40, 20, 0x20, 75 };
+/* Evolved mon name (vowel prefix): scrolling_text 5, 39, 0, 20, 2, 17
+ * → { 5, 0x67, 0x40, 20, 0x20, 76 } */
+static const uint8_t EVO_NAME_VOWEL_HEADER[6] = { 5, 0x67, 0x40, 20, 0x20, 76 };
+
+/* PokemonCaughtSpecialBonusText: scrolling_text_nopause 7, 49 */
+static const uint8_t CAUGHT_SPECIAL_BONUS_HEADER[6] = { 7, 0x54, 0, 0, 0, 49 };
+/* OneBillionText: scrolling_text 7, 46, 5, 20, 2, 19
+ * → { 7, 0x6E, 0x45, 20, 0x20, 80 } */
+static const uint8_t ONE_BILLION_HEADER[6] = { 7, 0x6E, 0x45, 20, 0x20, 80 };
+
+/* EvolutionSpecialBonusText: scrolling_text_nopause 7, 44 */
+static const uint8_t EVO_SPECIAL_BONUS_HEADER[6] = { 7, 0x54, 0, 0, 0, 44 };
+/* Data_2b6b (evolution digits): scrolling_text 7, 44, 6, 20, 2, 15
+ * → { 7, 0x6C, 0x46, 20, 0x20, 73 } */
+static const uint8_t EVO_DIGITS_HEADER[6] = { 7, 0x6C, 0x46, 20, 0x20, 73 };
+
 /* RedStageInitialMaps (0x16605) — 7 starting maps for ChooseInitialMap */
 static const uint8_t red_stage_initial_maps[7] = {
     MAP_PALLET_TOWN, MAP_VIRIDIAN_FOREST, MAP_PEWTER_CITY,
@@ -1450,7 +1477,7 @@ void load_field_structure_graphics(GameState *state) {
  * Applies the stored structure backup to collision state and reloads collision data.
  * This seals the launch alley by changing to a collision map without the alley opening.
  * Only runs once per ball (backup bit 7 set to prevent re-calling). */
-static void update_field_structures(GameState *state) {
+void update_field_structures(GameState *state) {
     if (state->red_stage_structure_backup & 0x80)
         return;  /* Already applied this ball */
 
@@ -1978,7 +2005,7 @@ static void resolve_ditto_slot(GameState *state) {
  * Updates BG tilemap tiles for each of the 4 CAVE lights based on their state.
  * GBC mode uses TileDataPointers_1531d (lit) / TileDataPointers_15325 (unlit).
  * Each light writes a single tile ID to a specific BG map position. */
-static void load_cave_lights_graphics(GameState *state) {
+void load_cave_lights_graphics(GameState *state) {
     uint8_t *bg = state->vram->bg_map[0];
     /* Light C (index 0): BG map 0x121 */
     bg[0x121] = state->cave_light_states[0] ? 0x27 : 0x26;
@@ -2099,7 +2126,7 @@ static void resolve_wild_mon(GameState *state) {
  *   Entry 0: left unlit, Entry 1: left lit
  *   Entry 2: right unlit, Entry 3: right lit
  * wWhichBumperGfx: 0=left, 1=right, 0xFF=don't load */
-static void load_bumper_graphics(GameState *state) {
+void load_bumper_graphics(GameState *state) {
     if (state->which_bumper_gfx == 0xFF)
         return;
     uint8_t *bg = state->vram->bg_map[0];
@@ -2189,7 +2216,7 @@ static void resolve_bumpers(GameState *state) {
  * GBC uses TileListDataPointers_14a83 (LoadTileLists format).
  * Index: 0=left frame0, 1=left frame1, 2=left hit,
  *        3=right frame0, 4=right frame1, 5=right hit */
-static void load_diglett_graphics(GameState *state, uint8_t gfx_index) {
+void load_diglett_graphics(GameState *state, uint8_t gfx_index) {
     uint8_t *bg = state->vram->bg_map[0];
     switch (gfx_index) {
     case 0: /* Left Diglett, frame 0: TileListData_14aa1 */
@@ -2223,7 +2250,7 @@ static void load_diglett_graphics(GameState *state, uint8_t gfx_index) {
  * Writes 10 tiles to BG map for Diglett hit counter display.
  * GBC uses TileListDataPointers_14c8d (LoadTileLists format).
  * Index: 0-3 = left (0/1/2/3 hits), 4-7 = right (0/1/2/3 hits) */
-static void load_diglett_number_graphics(GameState *state, uint8_t state_index) {
+void load_diglett_number_graphics(GameState *state, uint8_t state_index) {
     uint8_t *bg = state->vram->bg_map[0];
     switch (state_index) {
     case 0: /* Left, 0 hits: TileListData_14cb5 */
@@ -2575,7 +2602,7 @@ void add_extra_ball(GameState *state) {
  *   Ones unlit: tiles $68+digit*2 / $69+digit*2 at bg_map[0x0F] / bg_map[0x2F]
  *   Ones lit:   tiles $54+digit*2 / $55+digit*2 at bg_map[0x0F] / bg_map[0x2F]
  *===========================================================================*/
-static void load_bonus_mult_railing_gfx(GameState *state, uint8_t a) {
+void load_bonus_mult_railing_gfx(GameState *state, uint8_t a) {
     if (!state->vram) return;
     uint8_t lit = (a & 0x80) ? 1 : 0;
     a &= 0x7F;
@@ -3527,7 +3554,7 @@ static void update_pokeballs(GameState *state) {
  *   - Set slot_is_open=1, indicator_states[4]=0x80
  *   - Load slot cave cover graphics on bottom stage
  *===========================================================================*/
-static void open_slot_cave(GameState *state) {
+void open_slot_cave(GameState *state) {
     if (state->frames_until_slot_cave_opens == 0)
         return;
     state->frames_until_slot_cave_opens--;
@@ -3573,7 +3600,7 @@ static void open_slot_cave(GameState *state) {
  * Bottom: ref_y=0xFE, ref_x=0x38. Top: ref_y=0x86, ref_x=0x38.
  * Both stages use the same data file (ball_physics_f0000.bin, 9216 bytes).
  *===========================================================================*/
-static void apply_slot_force_field(GameState *state) {
+void apply_slot_force_field(GameState *state) {
     if (!state->slot_is_open)
         return;
 
@@ -5448,6 +5475,89 @@ static void show_captured_pokemon_text(GameState *state) {
 }
 
 /*=============================================================================
+ * ShowMonEvolvedText (0x10e0a) — Display "IT EVOLVED INTO A[N] [name]"
+ * or "EVOLUTION SPECIAL BONUS" if current_evolution_mon == 0xFF.
+ * Returns true if normal evolution text was shown, false if special bonus.
+ * Mirrors show_captured_pokemon_text but for evolution mode.
+ *===========================================================================*/
+static bool show_evolved_pokemon_text(GameState *state) {
+    if (state->current_evolution_mon == 0xFF) {
+        /* EvolutionSpecialBonus (0x10e8b): all evolutions done.
+         * Award 1,000,000 points and show "EVOLUTION SPECIAL BONUS" + digits. */
+        add_score_no_multiplier(state, state->config->scores.score_1000000);
+        fill_bottom_message_buffer_with_black_tile(state);
+        enable_bottom_text(state);
+        static const uint8_t bcd_1m[4] = { 0x01, 0x00, 0x00, 0x00 };
+        load_scrolling_text_with_bcd(state, 1, EVO_DIGITS_HEADER, bcd_1m);
+        load_scrolling_text(state, 0, EVO_SPECIAL_BONUS_HEADER,
+                            "EVOLUTION SPECIAL BONUS ");
+        return false;
+    }
+
+    /* Normal evolution: show "IT EVOLVED INTO A[N] [name]" */
+    const char *name = "POKEMON    ";
+    if (state->current_evolution_mon < NUM_POKEMON)
+        name = pokedex_names[state->current_evolution_mon];
+
+    /* Compute trimmed name length (strip trailing spaces) */
+    int name_len = 0;
+    for (int i = 0; i < 11 && name[i] != '\0'; i++) {
+        if (name[i] != ' ') name_len = i + 1;
+    }
+    if (name_len == 0) name_len = 1;
+
+    /* Vowel check on first character */
+    char first = name[0];
+    int is_vowel = (first == 'A' || first == 'E' || first == 'I' ||
+                    first == 'O' || first == 'U');
+
+    fill_bottom_message_buffer_with_black_tile(state);
+    enable_bottom_text(state);
+
+    /* Slot 0: prefix text — scrolls on and off with no pause */
+    if (is_vowel)
+        load_scrolling_text(state, 0, IT_EVOLVED_AN_HEADER, "IT EVOLVED INTO AN ");
+    else
+        load_scrolling_text(state, 0, IT_EVOLVED_A_HEADER, "IT EVOLVED INTO A ");
+
+    /* Slot 1: Pokemon name — scrolls on, pauses centered, scrolls off.
+     * Same centering logic as show_captured_pokemon_text. */
+    const uint8_t *base = is_vowel ? EVO_NAME_VOWEL_HEADER
+                                   : EVO_NAME_CONSONANT_HEADER;
+    uint8_t adjusted[6];
+    memcpy(adjusted, base, 6);
+    adjusted[2] += (uint8_t)((20 - name_len) / 2);
+    adjusted[5] += (uint8_t)name_len;
+
+    /* Write name tile indices into bottom_message_text at offset 0x20 */
+    uint8_t text_offset = adjusted[4]; /* 0x20 */
+    for (int i = 0; i < name_len; i++) {
+        char c = name[i];
+        uint8_t tile;
+        if (c >= 'A' && c <= 'Z')
+            tile = (uint8_t)(c - 'A');
+        else if (c == '\'') {
+            tile = 0x85;
+            load_special_text_char_gfx(state, 2);
+        } else
+            tile = 0x81; /* space */
+        state->bottom_message_text[text_offset + i] = tile;
+    }
+
+    /* Set up scrolling text slot 1 struct directly */
+    ScrollingText *st = &state->scrolling_text[1];
+    st->enabled = 1;
+    st->scroll_delay_counter = adjusted[0];
+    st->scroll_delay = adjusted[0];
+    st->message_box_offset = adjusted[1];
+    st->stop_offset = adjusted[2];
+    st->stop_duration = adjusted[3];
+    st->source_text_offset = adjusted[4];
+    st->scroll_steps_remaining = adjusted[5];
+    return true;
+}
+
+/*=============================================================================
  * ShowJackpotText (0x10825) — Payout jackpot as two stationary text entries
  * Slot 0: "JACKPOT" label at display offset 2, 180 frames
  * Slot 1: Formatted BCD score at display offset 10, 180 frames
@@ -5531,6 +5641,60 @@ static void handle_red_catchem_collision(GameState *state) {
         /* Func_10184: Process illumination changes into VRAM tile writes */
         process_billboard_illumination(state);
         add_score_no_multiplier(state, state->config->scores.score_100000);
+
+        /* ASM: Display "FLIPPED 100,000" stationary bottom text.
+         * FlippedText header: stationary_text 2, 0, 64 → {0x42, 0x00, 0x40, 0x00}
+         * CatchModeTileFlippedScoreStationaryTextHeader: stationary_text 10, 1, 64 → {0x4A, 0x10, 0x40, 0x00} */
+        {
+            static const uint8_t FLIPPED_TEXT_HDR[4] = {0x42, 0x00, 0x40, 0x00};
+            static const uint8_t FLIPPED_SCORE_HDR[4] = {0x4A, 0x10, 0x40, 0x00};
+            /* BCD score for display: $0010_0000 = 100,000 */
+            static const uint8_t flipped_bcd[4] = {0x00, 0x00, 0x10, 0x00};
+
+            fill_bottom_message_buffer_with_black_tile(state);
+            enable_bottom_text(state);
+
+            /* Format BCD score into bottom_message_text at offset 0x10 */
+            {
+                uint8_t *buf = state->bottom_message_text;
+                int pos = 0x10;
+                int b = 8;
+                bool suppressing = true;
+                for (int byte_idx = 3; byte_idx >= 0; byte_idx--) {
+                    uint8_t hi = (flipped_bcd[byte_idx] >> 4) & 0xF;
+                    if (hi != 0 || b == 1 || !suppressing) {
+                        buf[pos] = (uint8_t)(0x86 + hi);
+                        if (b == 6 || b == 3) buf[pos + 0x80] = 0x82;
+                        pos++;
+                        suppressing = false;
+                    }
+                    b--;
+                    uint8_t lo = flipped_bcd[byte_idx] & 0xF;
+                    if (lo != 0 || b == 1 || !suppressing) {
+                        buf[pos] = (uint8_t)(0x86 + lo);
+                        if (b == 6 || b == 3) buf[pos + 0x80] = 0x82;
+                        pos++;
+                        suppressing = false;
+                    }
+                    b--;
+                }
+                buf[pos++] = 0x86; /* trailing '0' */
+                buf[pos++] = 0x81; /* space */
+            }
+
+            /* Stationary text slot 1: score digits */
+            state->stationary_text[1].enabled = 1;
+            state->stationary_text[1].message_box_offset = FLIPPED_SCORE_HDR[0];
+            state->stationary_text[1].source_text_offset = FLIPPED_SCORE_HDR[1];
+            state->stationary_text[1].duration_low = FLIPPED_SCORE_HDR[2];
+            state->stationary_text[1].duration_high = FLIPPED_SCORE_HDR[3];
+
+            /* Stationary text slot 0: "FLIPPED" */
+            load_stationary_text(state, 0, FLIPPED_TEXT_HDR, "FLIPPED");
+        }
+
+        /* ASM: .AllTilesFlipped — add to jackpot */
+        add_bcd_to_jackpot(state, state->config->scores.jackpot_catch_voltorb);
         return;
     }
     if (id == 12) { /* SPINNER — add to jackpot (0x0000_1000) */
@@ -5848,6 +6012,23 @@ static void handle_red_catchem_collision(GameState *state) {
         /* Wait for JACKPOT stationary text to expire (180 frames / ~3s).
          * ASM: MainLoopUntilTextIsClear (0x3475) call #2 at line 802.
          * Pokeball stays on screen until this completes. */
+        if (state->bottom_text_enabled) break;
+        /* Func_10848 (0x10848): if first Pokemon caught (party was empty),
+         * show "POKEMON CAUGHT SPECIAL BONUS" + "1,000,000,000" text.
+         * Points already added in state 8. Text display was missing. */
+        if (state->num_party_mons <= 1) {
+            fill_bottom_message_buffer_with_black_tile(state);
+            enable_bottom_text(state);
+            load_scrolling_text(state, 1, ONE_BILLION_HEADER, "1,000,000,000 ");
+            load_scrolling_text(state, 0, CAUGHT_SPECIAL_BONUS_HEADER,
+                                "POKeMON CAUGHT SPECIAL BONUS ");
+            state->special_mode_state = 10;
+            break;
+        }
+        state->special_mode_state = 10;
+        break;
+    case 10:
+        /* Wait for special bonus text (if any), then restore ball. */
         if (state->bottom_text_enabled) break;
         /* Restore ball: X=$50, Y=$40, Xvel=$0080 (ASM line 807-818) */
         state->ball_x_pos = 0x5000;
@@ -6604,7 +6785,7 @@ static void handle_red_evo_mode_collision(GameState *state) {
              try_evo_object_hit(state, 8); return; /* Spinner */
     case 13: /* Slot hole: evolution complete! */
         if (state->num_evolution_trinkets >= 3) {
-            state->special_mode_state = 1; /* COMPLETE */
+            state->special_mode_state = 3; /* COMPLETE → show evolved text */
             add_score_no_multiplier(state, state->config->scores.score_10000000);
             PLAY_SFX(state, "catch_success", 0x25, 0x25);
         }
@@ -6686,19 +6867,36 @@ static void handle_red_evo_mode_collision(GameState *state) {
     case 0: /* Active: trinket collection via point-based collision */
         collect_evolution_trinket(state);
         break;
-    case 1: /* Complete: ShowJackpotText + conclude + restart music */
+    case 1: /* Legacy complete entry — redirect to text sequence */
+        state->special_mode_state = 3;
+        break;
+    case 2: /* Failed: show "EVOLUTION FAILED" text, then conclude */
+        load_scrolling_text(state, 0, EVOLUTION_FAILED_HEADER, "EVOLUTION FAILED");
+        state->special_mode_state = 6;
+        break;
+    case 3: /* Complete: ShowMonEvolvedText (ASM 0x10e0a) */
+        show_evolved_pokemon_text(state);
+        state->special_mode_state = 4;
+        break;
+    case 4: /* Wait for evolved text, then show jackpot */
+        if (state->bottom_text_enabled) break;
+        PLAY_MUSIC(state, "nothing", 0x0F, 0x00); /* MUSIC_NOTHING */
+        PLAY_SFX(state, "pokemon_evolve", 0x2D, 0x26);
+        show_jackpot_text(state);
+        state->special_mode_state = 5;
+        break;
+    case 5: /* Wait for jackpot text, then conclude */
+        if (state->bottom_text_enabled) break;
         state->num_pokemon_evolved_in_ball_bonus++;
         if (state->num_pokeballs < 3)
             state->num_pokeballs += 2;
         if (state->num_pokeballs > 3)
             state->num_pokeballs = 3;
-        /* ASM: stop music, SFX $2d/$26, ShowJackpotText */
-        PLAY_SFX(state, "pokemon_evolve", 0x2D, 0x26);
-        show_jackpot_text(state);
         conclude_special_mode_red_field(state);
         PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
         break;
-    case 2: /* Failed: conclude + restart music */
+    case 6: /* Wait for "EVOLUTION FAILED" text, then conclude */
+        if (state->bottom_text_enabled) break;
         conclude_special_mode_red_field(state);
         PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
         break;
@@ -6759,6 +6957,7 @@ static void choose_next_map_red(GameState *state) {
     uint8_t new_map;
     if (count < 3) {
         /* Pick from first set (7 maps) with anti-repeat check */
+        int attempts = 0;
         for (;;) {
             uint8_t r = gen_random(state) & 7;
             if (r >= 7) continue;
@@ -6767,9 +6966,16 @@ static void choose_next_map_red(GameState *state) {
             for (int i = 0; i < (int)count && !dup; i++)
                 if (state->visited_maps[i] == new_map) dup = 1;
             if (!dup) break;
+            if (++attempts > 100) {
+                printf("[MAP] WARNING: choose_next_map_red anti-repeat loop stuck! count=%d visited=[%d,%d,%d]\n",
+                    count, state->visited_maps[0], state->visited_maps[1], state->visited_maps[2]);
+                fflush(stdout);
+                break;
+            }
         }
     } else if (count < 5) {
         /* Pick from second set (4 maps) with anti-repeat */
+        int attempts = 0;
         for (;;) {
             new_map = second_map_set_red[gen_random(state) & 3];
             int dup = 0;
@@ -6777,6 +6983,11 @@ static void choose_next_map_red(GameState *state) {
             for (int i = 0; i < offset && !dup; i++)
                 if (state->visited_maps[3 + i] == new_map) dup = 1;
             if (!dup) break;
+            if (++attempts > 100) {
+                printf("[MAP] WARNING: choose_next_map_red set2 anti-repeat loop stuck! count=%d\n", count);
+                fflush(stdout);
+                break;
+            }
         }
     } else {
         new_map = MAP_INDIGO_PLATEAU;
@@ -6797,6 +7008,7 @@ static void choose_next_map_blue(GameState *state) {
 
     uint8_t new_map;
     if (count < 3) {
+        int attempts = 0;
         for (;;) {
             uint8_t r = gen_random(state) & 7;
             if (r >= 7) continue;
@@ -6805,8 +7017,15 @@ static void choose_next_map_blue(GameState *state) {
             for (int i = 0; i < (int)count && !dup; i++)
                 if (state->visited_maps[i] == new_map) dup = 1;
             if (!dup) break;
+            if (++attempts > 100) {
+                printf("[MAP] WARNING: choose_next_map_blue anti-repeat loop stuck! count=%d visited=[%d,%d,%d]\n",
+                    count, state->visited_maps[0], state->visited_maps[1], state->visited_maps[2]);
+                fflush(stdout);
+                break;
+            }
         }
     } else if (count < 5) {
+        int attempts = 0;
         for (;;) {
             new_map = second_map_set_blue[gen_random(state) & 3];
             int dup = 0;
@@ -6814,6 +7033,11 @@ static void choose_next_map_blue(GameState *state) {
             for (int i = 0; i < offset && !dup; i++)
                 if (state->visited_maps[3 + i] == new_map) dup = 1;
             if (!dup) break;
+            if (++attempts > 100) {
+                printf("[MAP] WARNING: choose_next_map_blue set2 anti-repeat loop stuck! count=%d\n", count);
+                fflush(stdout);
+                break;
+            }
         }
     } else {
         new_map = MAP_INDIGO_PLATEAU;
@@ -7055,6 +7279,55 @@ static void handle_blue_catchem_collision(GameState *state) {
         /* Func_10184: Process illumination changes into VRAM tile writes */
         process_billboard_illumination(state);
         add_score_no_multiplier(state, state->config->scores.score_100000);
+
+        /* ASM: Display "FLIPPED 100,000" stationary bottom text.
+         * Same headers as red field (shared text data). */
+        {
+            static const uint8_t FLIPPED_TEXT_HDR[4] = {0x42, 0x00, 0x40, 0x00};
+            static const uint8_t FLIPPED_SCORE_HDR[4] = {0x4A, 0x10, 0x40, 0x00};
+            static const uint8_t flipped_bcd[4] = {0x00, 0x00, 0x10, 0x00};
+
+            fill_bottom_message_buffer_with_black_tile(state);
+            enable_bottom_text(state);
+
+            {
+                uint8_t *buf = state->bottom_message_text;
+                int pos = 0x10;
+                int b = 8;
+                bool suppressing = true;
+                for (int byte_idx = 3; byte_idx >= 0; byte_idx--) {
+                    uint8_t hi = (flipped_bcd[byte_idx] >> 4) & 0xF;
+                    if (hi != 0 || b == 1 || !suppressing) {
+                        buf[pos] = (uint8_t)(0x86 + hi);
+                        if (b == 6 || b == 3) buf[pos + 0x80] = 0x82;
+                        pos++;
+                        suppressing = false;
+                    }
+                    b--;
+                    uint8_t lo = flipped_bcd[byte_idx] & 0xF;
+                    if (lo != 0 || b == 1 || !suppressing) {
+                        buf[pos] = (uint8_t)(0x86 + lo);
+                        if (b == 6 || b == 3) buf[pos + 0x80] = 0x82;
+                        pos++;
+                        suppressing = false;
+                    }
+                    b--;
+                }
+                buf[pos++] = 0x86;
+                buf[pos++] = 0x81;
+            }
+
+            state->stationary_text[1].enabled = 1;
+            state->stationary_text[1].message_box_offset = FLIPPED_SCORE_HDR[0];
+            state->stationary_text[1].source_text_offset = FLIPPED_SCORE_HDR[1];
+            state->stationary_text[1].duration_low = FLIPPED_SCORE_HDR[2];
+            state->stationary_text[1].duration_high = FLIPPED_SCORE_HDR[3];
+
+            load_stationary_text(state, 0, FLIPPED_TEXT_HDR, "FLIPPED");
+        }
+
+        /* ASM: .AllTilesFlipped — add to jackpot */
+        add_bcd_to_jackpot(state, state->config->scores.jackpot_catch_voltorb);
         return;
     }
     if (id == 12) { /* SPINNER — add to jackpot */
@@ -7339,6 +7612,23 @@ static void handle_blue_catchem_collision(GameState *state) {
         /* Wait for JACKPOT stationary text to expire (180 frames / ~3s).
          * ASM: MainLoopUntilTextIsClear call #2. Pokeball stays on screen. */
         if (state->bottom_text_enabled) break;
+        /* Func_10848 (0x10848): if first Pokemon caught (party was empty),
+         * show "POKEMON CAUGHT SPECIAL BONUS" + "1,000,000,000" text.
+         * Points already added in state 8. */
+        if (state->num_party_mons <= 1) {
+            fill_bottom_message_buffer_with_black_tile(state);
+            enable_bottom_text(state);
+            load_scrolling_text(state, 1, ONE_BILLION_HEADER, "1,000,000,000 ");
+            load_scrolling_text(state, 0, CAUGHT_SPECIAL_BONUS_HEADER,
+                                "POKeMON CAUGHT SPECIAL BONUS ");
+            state->special_mode_state = 10;
+            break;
+        }
+        state->special_mode_state = 10;
+        break;
+    case 10:
+        /* Wait for special bonus text (if any), then restore ball. */
+        if (state->bottom_text_enabled) break;
         /* Restore ball: X=$50, Y=$40, Xvel=$0080 (ASM line 807-818) */
         state->ball_x_pos = 0x5000;
         state->ball_y_pos = 0x4000;
@@ -7528,7 +7818,7 @@ static void handle_blue_evo_mode_collision(GameState *state) {
              try_blue_evo_object_hit(state, 8); return; /* Spinner */
     case 13: /* Slot hole: evolution complete! */
         if (state->num_evolution_trinkets >= 3) {
-            state->special_mode_state = 1;
+            state->special_mode_state = 3; /* COMPLETE → show evolved text */
             add_score_no_multiplier(state, state->config->scores.score_10000000);
             PLAY_SFX(state, "catch_success", 0x25, 0x25);
         }
@@ -7594,18 +7884,36 @@ static void handle_blue_evo_mode_collision(GameState *state) {
     case 0: /* Active: trinket collection via point-based collision */
         collect_evolution_trinket(state);
         break;
-    case 1: /* Complete: ShowJackpotText + conclude */
+    case 1: /* Legacy complete entry — redirect to text sequence */
+        state->special_mode_state = 3;
+        break;
+    case 2: /* Failed: show "EVOLUTION FAILED" text, then conclude */
+        load_scrolling_text(state, 0, EVOLUTION_FAILED_HEADER, "EVOLUTION FAILED");
+        state->special_mode_state = 6;
+        break;
+    case 3: /* Complete: ShowMonEvolvedText (ASM 0x10e0a) */
+        show_evolved_pokemon_text(state);
+        state->special_mode_state = 4;
+        break;
+    case 4: /* Wait for evolved text, then show jackpot */
+        if (state->bottom_text_enabled) break;
+        PLAY_MUSIC(state, "nothing", 0x0F, 0x00); /* MUSIC_NOTHING */
+        PLAY_SFX(state, "pokemon_evolve", 0x2D, 0x26);
+        show_jackpot_text(state);
+        state->special_mode_state = 5;
+        break;
+    case 5: /* Wait for jackpot text, then conclude */
+        if (state->bottom_text_enabled) break;
         state->num_pokemon_evolved_in_ball_bonus++;
         if (state->num_pokeballs < 3)
             state->num_pokeballs += 2;
         if (state->num_pokeballs > 3)
             state->num_pokeballs = 3;
-        PLAY_SFX(state, "pokemon_evolve", 0x2D, 0x26);
-        show_jackpot_text(state);
         conclude_special_mode_blue_field(state);
         PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
         break;
-    case 2:
+    case 6: /* Wait for "EVOLUTION FAILED" text, then conclude */
+        if (state->bottom_text_enabled) break;
         conclude_special_mode_blue_field(state);
         PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
         break;
@@ -7660,7 +7968,7 @@ bool check_special_mode_collision(GameState *state, uint8_t collision_id) {
  *
  * On BOTTOM stage, this logic is integrated into resolve_cave_lights().
  *===========================================================================*/
-static void update_cave_lights_blinking(GameState *state) {
+void update_cave_lights_blinking(GameState *state) {
     /* ASM: UpdateCAVELightsBlinking_RedField (0x15270)
      * On the TOP stage, this is a PURE STATE MACHINE — it updates the
      * cave_light_states[] array but does NOT call LoadCAVELightsGraphics.
@@ -7761,7 +8069,7 @@ static const uint8_t arrow_ind4_tiles[2][4] = {
 static const uint16_t arrow_ind4_offsets[4] = {0x49, 0x4A, 0x69, 0x6A};
 
 /* LoadArrowIndicatorGraphics_RedField (0x169cd) */
-static void load_arrow_indicator_graphics(GameState *state, uint8_t indicator, uint8_t gfx_state) {
+void load_arrow_indicator_graphics(GameState *state, uint8_t indicator, uint8_t gfx_state) {
     uint8_t *bg = state->vram->bg_map[0];
     switch (indicator) {
     case 0:
@@ -7796,7 +8104,7 @@ static void load_arrow_indicator_graphics(GameState *state, uint8_t indicator, u
  * Updates every 32 frames. For each active indicator (bit 7 set),
  * alternates between counter and counter+1 graphics state based on
  * hFrameCounter bit 5. */
-static void update_arrow_indicators(GameState *state) {
+void update_arrow_indicators(GameState *state) {
     if ((state->hram.frame_counter & 0x1F) != 0)
         return;
     for (uint8_t c = 0; c < 5; c++) {
@@ -7864,7 +8172,7 @@ void load_red_field_bottom_graphics(GameState *state) {
  * Writes BG tilemap tiles showing staryu on left or right side.
  * From data/queued_tiledata/red_field/staryu_bumper.asm TileDataPointers_1695a.
  *===========================================================================*/
-static void load_staryu_graphics_bottom(GameState *state) {
+void load_staryu_graphics_bottom(GameState *state) {
     if (!state->vram) return;
     uint8_t *bg = state->vram->bg_map[0];
     if (state->staryu_side & 1) {
@@ -7884,7 +8192,7 @@ static void load_staryu_graphics_bottom(GameState *state) {
  * Only active when stage_collision_state bit 0 is set.
  * From data/queued_tiledata/red_field/ball_upgrade_triggers.asm.
  *===========================================================================*/
-static void load_upgrade_triggers_graphics(GameState *state) {
+void load_upgrade_triggers_graphics(GameState *state) {
     if (!state->vram) return;
     if (!(state->stage_collision_state & 1)) return;
 
@@ -8079,7 +8387,7 @@ static void load_bonus_multiplier_railing_graphics(GameState *state) {
  * Index = wd502 (staryu_side | staryu_anim_active<<1), values 0-3.
  * From data/queued_tiledata/red_field/staryu_bumper.asm TileDataPointers_16910.
  *===========================================================================*/
-static void load_staryu_graphics_top(GameState *state) {
+void load_staryu_graphics_top(GameState *state) {
     if (!state->vram) return;
     uint8_t *bg = state->vram->bg_map[0];
     uint8_t idx = (state->staryu_side & 1) | (state->staryu_anim_active ? 2 : 0);
@@ -8110,7 +8418,7 @@ static void load_staryu_graphics_top(GameState *state) {
  * From data/queued_tiledata/red_field/spinner.asm TileDataPointers_1509b.
  * Each charge level writes 4 tiles to bg_map offsets 0x10E-0x10F and 0x12E-0x12F.
  *===========================================================================*/
-static void update_spinner_charge_graphics(GameState *state) {
+void update_spinner_charge_graphics(GameState *state) {
     if (!state->vram) return;
     uint8_t *bg = state->vram->bg_map[0];
     uint8_t charge = state->pikachu_saver_charge;

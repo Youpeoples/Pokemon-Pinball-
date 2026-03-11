@@ -1,0 +1,25 @@
+{
+    "name": "Red Field",
+    "type": "main_field",
+    "description": "The original Red Field table from Pokemon Pinball",
+    "stages": {
+        "top": {
+            "id": 0,
+            "has_flippers": false
+        },
+        "bottom": {
+            "id": 1,
+            "has_flippers": true
+        }
+    },
+    "scripts": {
+        "main": "scripts/main.lua",
+        "collision": "scripts/collision.lua",
+        "sprites": "scripts/sprites.lua",
+        "slot": "scripts/slot.lua",
+        "catchem": "scripts/catchem.lua",
+        "evolution": "scripts/evolution.lua",
+        "map_move": "scripts/map_move.lua",
+        "billboard": "scripts/billboard.lua"
+    }
+}

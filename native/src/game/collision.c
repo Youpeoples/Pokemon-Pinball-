@@ -299,6 +299,29 @@ static uint8_t *bottom_right_masks = NULL;
 static size_t bottom_right_masks_size = 0;
 
 /*=============================================================================
+ * Lua-driven path overrides
+ *===========================================================================*/
+static char *collision_mask_override = NULL;
+static char *collision_map_override = NULL;
+
+void collision_set_mask_override(const char *path) {
+    free(collision_mask_override);
+    collision_mask_override = path ? _strdup(path) : NULL;
+}
+
+void collision_set_map_override(const char *path) {
+    free(collision_map_override);
+    collision_map_override = path ? _strdup(path) : NULL;
+}
+
+void collision_clear_overrides(void) {
+    free(collision_mask_override);
+    collision_mask_override = NULL;
+    free(collision_map_override);
+    collision_map_override = NULL;
+}
+
+/*=============================================================================
  * Collision map loading
  *===========================================================================*/
 
@@ -410,9 +433,14 @@ void load_stage_collision_attributes(GameState *state) {
     char path[260];
 
     /* Load collision map (.collision binary file = 0x300 bytes) */
-    const char *map_file = get_collision_map_filename(
-        state->current_stage, state->stage_collision_state);
-    snprintf(path, sizeof(path), "%s/%s", state->asset_base_path, map_file);
+    if (collision_map_override) {
+        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path,
+                 collision_map_override);
+    } else {
+        const char *map_file = get_collision_map_filename(
+            state->current_stage, state->stage_collision_state);
+        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path, map_file);
+    }
     size_t map_size = 0;
     uint8_t *map_data = load_binary_file(path, &map_size);
     if (map_data && map_size >= 0x300) {
@@ -427,9 +455,14 @@ void load_stage_collision_attributes(GameState *state) {
     free(map_data);
 
     /* Load collision masks (1bpp PNG) */
-    const char *mask_file = get_collision_mask_filename(
-        state->current_stage, state->stage_collision_state);
-    snprintf(path, sizeof(path), "%s/%s", state->asset_base_path, mask_file);
+    if (collision_mask_override) {
+        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path,
+                 collision_mask_override);
+    } else {
+        const char *mask_file = get_collision_mask_filename(
+            state->current_stage, state->stage_collision_state);
+        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path, mask_file);
+    }
     free(collision_masks);
     collision_masks = masks_from_png(path, &collision_masks_size);
     if (!collision_masks) {
@@ -440,7 +473,6 @@ void load_stage_collision_attributes(GameState *state) {
     if (STAGE_HAS_FLIPPERS(state->current_stage)) {
         load_bottom_collision_masks(state);
     }
-
 }
 
 /*=============================================================================

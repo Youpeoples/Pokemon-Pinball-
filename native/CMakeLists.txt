@@ -9,7 +9,7 @@ set(SDL2_DIR "${CMAKE_SOURCE_DIR}/../SDL2")
 set(SDL2_INCLUDE_DIR "${SDL2_DIR}/include")
 set(SDL2_LIB_DIR "${SDL2_DIR}/lib/WIN/x64")
 
-# Collect all source files
+# Collect all source files (includes Lua 5.4 under src/third_party/lua/)
 file(GLOB_RECURSE SOURCES "src/*.c")
 
 # Application icon resource
@@ -22,6 +22,7 @@ set_target_properties(game PROPERTIES OUTPUT_NAME "Pokemon Pinball Plus")
 target_include_directories(game PRIVATE
     src/
     src/third_party
+    src/third_party/lua
     ${SDL2_INCLUDE_DIR}
 )
 
@@ -62,3 +63,11 @@ add_custom_command(TARGET game POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/../config" "$<TARGET_FILE_DIR:game>/config"
 )
+
+# Copy tables/ directory (Lua table scripts) next to executable if it exists
+if(EXISTS "${CMAKE_SOURCE_DIR}/../tables")
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/../tables" "$<TARGET_FILE_DIR:game>/tables"
+    )
+endif()

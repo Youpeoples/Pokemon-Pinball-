@@ -18,6 +18,7 @@
 #include "audio/audio.h"
 #include "game/game_state.h"
 #include "game/config_data.h"
+#include "game/scripting.h"
 #include "game/main_loop.h"
 #include "game/joypad.h"
 #include "game/save.h"
@@ -153,6 +154,10 @@ int main(int argc, char *argv[]) {
     /* Load custom WAV/OGG audio clips referenced in audio.json */
     audio_load_custom_clips(state->audio, state->config, state->asset_base_path);
 
+    /* Initialize Lua scripting engine for moddable table logic.
+     * Tables are loaded on-demand when a stage is entered (in pinball.c). */
+    state->script_engine = script_engine_init(state);
+
     /* Save data is loaded during copyright screen exit (FadeOutCopyrightScreenAndLoadData),
      * matching ASM lifecycle ordering. See handle_copyright_screen state 2. */
 
@@ -160,6 +165,10 @@ int main(int argc, char *argv[]) {
     double last_time = platform_get_time_ms(platform);
     double accumulator = 0.0;
     bool running = true;
+
+    /* FPS measurement */
+    double fps_timer = last_time;
+    int fps_frame_count = 0;
 
     while (running) {
         double current_time = platform_get_time_ms(platform);
@@ -177,6 +186,37 @@ int main(int argc, char *argv[]) {
             break;
         }
 
+        /* F1 toggles debug overlay */
+        if (platform_consume_f1_toggle(platform)) {
+            state->debug_mode = state->debug_mode ? 0 : 1;
+        }
+
+        /* Mouse click repositions ball when debug is active + pinball physics */
+        {
+            int mx, my;
+            if (state->debug_mode > 0 &&
+                platform_consume_mouse_click(platform, &mx, &my) &&
+                state->current_screen == 4 && state->screen_state == 2)
+            {
+                /* Convert screen coords to stage coords */
+                int stage_x = mx + (int)state->hram.scx;
+                int stage_y = my + (int)state->hram.scy;
+                state->ball_x_pos = (uint16_t)(stage_x << 8);
+                state->ball_y_pos = (uint16_t)(stage_y << 8);
+                state->ball_x_velocity = 0;
+                state->ball_y_velocity = 0;
+                state->ball_spin = 0;
+            }
+        }
+
+        /* FPS measurement (update once per second) */
+        fps_frame_count++;
+        if (current_time - fps_timer >= 1000.0) {
+            state->debug_fps = (float)(fps_frame_count * 1000.0 / (current_time - fps_timer));
+            fps_frame_count = 0;
+            fps_timer = current_time;
+        }
+
         /* Fixed timestep game update */
         while (accumulator >= FRAME_TIME_MS) {
             /* Read joypad (equivalent to ReadJoypad in home/joypad.asm) */
@@ -187,7 +227,16 @@ int main(int argc, char *argv[]) {
             state->hram.frame_counter++;
 
             /* Run one frame of game logic (equivalent to Main in home.asm) */
-            main_loop_update(state);
+            {
+                double t0 = platform_get_time_ms(platform);
+                main_loop_update(state);
+                double t1 = platform_get_time_ms(platform);
+                if (t1 - t0 > 500.0) {
+                    printf("[WATCHDOG] main_loop_update took %.0fms! screen=%d state=%d stage=0x%02X\n",
+                        t1 - t0, state->current_screen, state->screen_state, state->current_stage);
+                    fflush(stdout);
+                }
+            }
 
             /* Update audio engine (synthesize one frame of audio) */
             audio_update(audio);
@@ -198,10 +247,14 @@ int main(int argc, char *argv[]) {
         /* Render current frame */
         renderer_begin_frame(renderer);
         renderer_draw_game(renderer, state);
+        if (state->debug_mode > 0) {
+            renderer_draw_debug_overlay(renderer, state);
+        }
         renderer_end_frame(renderer);
     }
 
     /* Cleanup */
+    if (state->script_engine) script_engine_shutdown(state->script_engine);
     game_state_free(state);
     vram_free(vram);
     if (audio) audio_shutdown(audio);

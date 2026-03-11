@@ -1,0 +1,10 @@
+{
+  "name": "Seel Bonus Stage",
+  "type": "bonus_stage",
+  "stage_id": 15,
+  "scripts": [
+    {
+      "path": "scripts/main.lua"
+    }
+  ]
+}

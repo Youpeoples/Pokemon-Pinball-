@@ -129,6 +129,27 @@ void start_slot_roulette(GameState *state);
 void update_slot_roulette(GameState *state);
 
 /*=============================================================================
+ * Non-static resolve/update helpers — exposed for Lua scripting API.
+ * Lua calls these via pinball.* wrappers; C handles the VRAM details.
+ *===========================================================================*/
+
+void update_field_structures(GameState *state);
+void load_cave_lights_graphics(GameState *state);
+void load_bumper_graphics(GameState *state);
+void load_diglett_graphics(GameState *state, uint8_t gfx_index);
+void load_diglett_number_graphics(GameState *state, uint8_t state_index);
+void load_bonus_mult_railing_gfx(GameState *state, uint8_t val);
+void open_slot_cave(GameState *state);
+void apply_slot_force_field(GameState *state);
+void update_cave_lights_blinking(GameState *state);
+void load_arrow_indicator_graphics(GameState *state, uint8_t indicator, uint8_t gfx_state);
+void update_arrow_indicators(GameState *state);
+void load_staryu_graphics_bottom(GameState *state);
+void load_staryu_graphics_top(GameState *state);
+void load_upgrade_triggers_graphics(GameState *state);
+void update_spinner_charge_graphics(GameState *state);
+
+/*=============================================================================
  * Graphics reload functions — shared between red and blue fields.
  * Called from _LoadStageDataXxxFieldBottom during stage transitions.
  *===========================================================================*/

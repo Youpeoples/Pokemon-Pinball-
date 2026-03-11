@@ -86,7 +86,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <BufferSecurityCheck></BufferSecurityCheck>
@@ -112,10 +112,10 @@
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -123,7 +123,7 @@
       <ProxyFileName>%(Filename)_p.c</ProxyFileName>
     </Midl>
     <PostBuildEvent>
-      <Message>					</Message>
+      <Message>						</Message>
       <Command>setlocal
 "C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../SDL2/lib/WIN/x64/SDL2.dll" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/Debug"
 if %errorlevel% neq 0 goto :cmEnd
@@ -177,6 +177,15 @@ endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
 :cmErrorLevel
 exit /b %1
 :cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../tables" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/Debug/tables"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
 if %errorlevel% neq 0 goto :VCEnd</Command>
     </PostBuildEvent>
     <Link>
@@ -199,7 +208,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <BufferSecurityCheck></BufferSecurityCheck>
@@ -226,10 +235,10 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -237,7 +246,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
       <ProxyFileName>%(Filename)_p.c</ProxyFileName>
     </Midl>
     <PostBuildEvent>
-      <Message>					</Message>
+      <Message>						</Message>
       <Command>setlocal
 "C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../SDL2/lib/WIN/x64/SDL2.dll" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/Release"
 if %errorlevel% neq 0 goto :cmEnd
@@ -291,6 +300,15 @@ endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
 :cmErrorLevel
 exit /b %1
 :cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../tables" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/Release/tables"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
 if %errorlevel% neq 0 goto :VCEnd</Command>
     </PostBuildEvent>
     <Link>
@@ -313,7 +331,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <BufferSecurityCheck></BufferSecurityCheck>
@@ -340,10 +358,10 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -351,7 +369,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
       <ProxyFileName>%(Filename)_p.c</ProxyFileName>
     </Midl>
     <PostBuildEvent>
-      <Message>					</Message>
+      <Message>						</Message>
       <Command>setlocal
 "C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../SDL2/lib/WIN/x64/SDL2.dll" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/MinSizeRel"
 if %errorlevel% neq 0 goto :cmEnd
@@ -405,6 +423,15 @@ endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
 :cmErrorLevel
 exit /b %1
 :cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../tables" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/MinSizeRel/tables"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
 if %errorlevel% neq 0 goto :VCEnd</Command>
     </PostBuildEvent>
     <Link>
@@ -427,7 +454,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <BufferSecurityCheck></BufferSecurityCheck>
@@ -453,10 +480,10 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
-      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
       <HeaderFileName>%(Filename).h</HeaderFileName>
       <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
@@ -464,7 +491,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
       <ProxyFileName>%(Filename)_p.c</ProxyFileName>
     </Midl>
     <PostBuildEvent>
-      <Message>					</Message>
+      <Message>						</Message>
       <Command>setlocal
 "C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../SDL2/lib/WIN/x64/SDL2.dll" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/RelWithDebInfo"
 if %errorlevel% neq 0 goto :cmEnd
@@ -512,6 +539,15 @@ exit /b %1
 if %errorlevel% neq 0 goto :VCEnd
 setlocal
 "C:\Program Files\CMake\bin\cmake.exe" -E copy_directory "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../config" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/RelWithDebInfo/config"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/../tables" "C:/Users/ville/Documents/GitHub/Pokemon Pinball +/native/build/RelWithDebInfo/tables"
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
@@ -619,6 +655,8 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\rng.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\save.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\score.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\script_api.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\scripting.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\seel_bonus.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\tilt.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\timer.c" />
@@ -631,6 +669,38 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\vram.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\renderer\vwf.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\cJSON.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lapi.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lauxlib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lbaselib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lcode.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lcorolib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lctype.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ldblib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ldebug.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ldo.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ldump.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lfunc.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lgc.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\linit.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\liolib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\llex.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lmathlib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lmem.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\loadlib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lobject.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lopcodes.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\loslib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lparser.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lstate.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lstring.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lstrlib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ltable.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ltablib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\ltm.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lundump.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lutf8lib.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lvm.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lzio.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_impl.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_vorbis.c" />
     <ResourceCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game.rc" />

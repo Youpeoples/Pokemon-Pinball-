@@ -36,4 +36,11 @@ void *platform_get_sdl_renderer(Platform *platform);
 /* Get the scale factor */
 int platform_get_scale(Platform *platform);
 
+/* Returns true (and clears) if F1 was pressed since last call */
+bool platform_consume_f1_toggle(Platform *platform);
+
+/* Returns true (and clears) if left mouse button was clicked since last call.
+ * out_x/out_y receive the click position in GBC logical coordinates (0-159, 0-143). */
+bool platform_consume_mouse_click(Platform *platform, int *out_x, int *out_y);
+
 #endif /* PLATFORM_H */

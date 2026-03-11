@@ -33,4 +33,13 @@ void check_stage_collision(GameState *state);
  */
 void load_bottom_collision_masks(GameState *state);
 
+/*
+ * Lua-driven path overrides for collision data.
+ * When set, the override path replaces the auto-detected collision file
+ * for the current stage. Path is relative to asset_base_path.
+ */
+void collision_set_mask_override(const char *path);
+void collision_set_map_override(const char *path);
+void collision_clear_overrides(void);
+
 #endif /* COLLISION_H */

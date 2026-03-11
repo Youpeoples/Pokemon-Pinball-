@@ -100,4 +100,13 @@ void clear_billboard_tilemap(GameState *state);
  *---------------------------------------------------------------------------*/
 void billboard_free_cache(void);
 
+/*---------------------------------------------------------------------------
+ * Lua-driven path overrides.
+ * When set, the override path replaces the hardcoded PNG path for that ID.
+ * Path is relative to asset_base_path (e.g. "tables/red_field/assets/x.png").
+ *---------------------------------------------------------------------------*/
+void billboard_set_pic_override(uint8_t pic_id, const char *path);
+void billboard_set_td_override(uint8_t td_index, const char *path);
+void billboard_clear_overrides(void);
+
 #endif /* BILLBOARD_H */

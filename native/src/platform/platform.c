@@ -11,6 +11,10 @@ struct Platform {
     int screen_h;
     int scale;
     uint8_t joypad_state;  /* Current button state mapped from keyboard */
+    bool f1_pressed;       /* Edge-detected F1 toggle for debug overlay */
+    bool mouse_clicked;    /* Left mouse button was clicked */
+    int mouse_gbc_x;       /* Click position in GBC logical coords */
+    int mouse_gbc_y;
 };
 
 /* Default keyboard mapping (matches original GBC controls) */
@@ -103,6 +107,15 @@ bool platform_poll_events(Platform *p) {
         if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
             return false;
         }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_F1) {
+            p->f1_pressed = true;
+        }
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+            p->mouse_gbc_x = event.button.x / p->scale;
+            p->mouse_gbc_y = event.button.y / p->scale;
+            p->mouse_clicked = true;
+        }
     }
 
     /* Update joypad state from keyboard */
@@ -158,4 +171,18 @@ void *platform_get_sdl_renderer(Platform *p) {
 
 int platform_get_scale(Platform *p) {
     return p->scale;
+}
+
+bool platform_consume_f1_toggle(Platform *p) {
+    bool was = p->f1_pressed;
+    p->f1_pressed = false;
+    return was;
+}
+
+bool platform_consume_mouse_click(Platform *p, int *out_x, int *out_y) {
+    if (!p->mouse_clicked) return false;
+    p->mouse_clicked = false;
+    if (out_x) *out_x = p->mouse_gbc_x;
+    if (out_y) *out_y = p->mouse_gbc_y;
+    return true;
 }

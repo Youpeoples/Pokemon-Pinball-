@@ -159,6 +159,48 @@ static uint8_t *pic_cache_on[NUM_BILLBOARD_PICS];
 static uint8_t *pic_cache_off[NUM_BILLBOARD_PICS];
 static uint8_t *td_cache[NUM_BILLBOARD_TILE_DATA];
 
+/*=============================================================================
+ * Lua-driven path overrides
+ *
+ * When non-NULL, these full relative paths (e.g. "tables/red_field/assets/x.png")
+ * replace the hardcoded paths in billboard_pic_paths / tile_data_paths.
+ * Override paths must include the .png extension and any _on/_off suffix.
+ *===========================================================================*/
+static char *billboard_pic_overrides[NUM_BILLBOARD_PICS];
+static char *billboard_td_overrides[NUM_BILLBOARD_TILE_DATA];
+
+void billboard_set_pic_override(uint8_t pic_id, const char *path) {
+    if (pic_id >= NUM_BILLBOARD_PICS) return;
+    free(billboard_pic_overrides[pic_id]);
+    billboard_pic_overrides[pic_id] = path ? _strdup(path) : NULL;
+    /* Invalidate cache so next load uses the new path */
+    free(pic_cache_on[pic_id]);  pic_cache_on[pic_id] = NULL;
+    free(pic_cache_off[pic_id]); pic_cache_off[pic_id] = NULL;
+}
+
+void billboard_set_td_override(uint8_t td_index, const char *path) {
+    if (td_index >= NUM_BILLBOARD_TILE_DATA) return;
+    free(billboard_td_overrides[td_index]);
+    billboard_td_overrides[td_index] = path ? _strdup(path) : NULL;
+    /* Invalidate cache so next load uses the new path */
+    free(td_cache[td_index]); td_cache[td_index] = NULL;
+}
+
+void billboard_clear_overrides(void) {
+    for (int i = 0; i < NUM_BILLBOARD_PICS; i++) {
+        free(billboard_pic_overrides[i]);
+        billboard_pic_overrides[i] = NULL;
+        /* Invalidate caches that had overrides */
+        free(pic_cache_on[i]);  pic_cache_on[i] = NULL;
+        free(pic_cache_off[i]); pic_cache_off[i] = NULL;
+    }
+    for (int i = 0; i < NUM_BILLBOARD_TILE_DATA; i++) {
+        free(billboard_td_overrides[i]);
+        billboard_td_overrides[i] = NULL;
+        free(td_cache[i]); td_cache[i] = NULL;
+    }
+}
+
 /* Load tile data from a PNG file. Returns cached or newly loaded data.
  * Caller must NOT free the returned pointer (it's cached). */
 static uint8_t *load_cached_png(const char *asset_base, const char *rel_path,
@@ -194,6 +236,13 @@ static uint8_t *get_pic_data(GameState *state, uint8_t pic_id, int is_off) {
     if (pic_id >= NUM_BILLBOARD_PICS)
         return NULL;
 
+    /* Check for Lua-driven path override */
+    if (billboard_pic_overrides[pic_id]) {
+        uint8_t **cache = is_off ? &pic_cache_off[pic_id] : &pic_cache_on[pic_id];
+        return load_cached_png(state->asset_base_path,
+                               billboard_pic_overrides[pic_id], cache);
+    }
+
     const char *base = billboard_pic_paths[pic_id];
     if (!base) return NULL;
 
@@ -218,6 +267,12 @@ static uint8_t *get_pic_data(GameState *state, uint8_t pic_id, int is_off) {
 static uint8_t *get_td_data(GameState *state, uint8_t index) {
     if (index >= NUM_BILLBOARD_TILE_DATA)
         return NULL;
+
+    /* Check for Lua-driven path override */
+    if (billboard_td_overrides[index]) {
+        return load_cached_png(state->asset_base_path,
+                               billboard_td_overrides[index], &td_cache[index]);
+    }
 
     const char *base = tile_data_paths[index];
     if (!base) return NULL;

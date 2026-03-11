@@ -38,4 +38,7 @@ void decode_tile_2bpp(const uint8_t *tile_data, uint8_t *pixels);
 /* Decode a 2bpp tile with horizontal flip */
 void decode_tile_2bpp_hflip(const uint8_t *tile_data, uint8_t *pixels);
 
+/* Draw debug overlay (FPS, screen/stage, ball state) onto the framebuffer */
+void renderer_draw_debug_overlay(Renderer *renderer, GameState *state);
+
 #endif /* RENDERER_H */

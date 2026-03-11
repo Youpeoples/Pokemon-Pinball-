@@ -24,9 +24,20 @@
 #include "renderer/stage_palettes.h"
 #include "renderer/vram.h"
 #include "renderer/vwf.h"
+#include "renderer/tile_loader.h"
 #include "stb_image.h"
+#include "stb_image.h"
+#include "cJSON.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+#ifdef _WIN32
+/* Prevent windows.h from redefining RGB (conflicts with stage_palettes.h) */
+#define WIN32_LEAN_AND_MEAN
+#define NOGDI
+#include <windows.h>
+#endif
 
 /* Music bank/ID constants (from constants/song_constants.asm) */
 #define MUSIC_BANK_0F  0x0F
@@ -786,6 +797,7 @@ static void handle_titlescreen(GameState *state) {
         case 2:
             /* Func_c10e (0xc10e): Continue prompt (New Game / Continue)
              * Animation plays first, then cursor input is accepted. */
+            handle_titlescreen_animations(state);
             {
                 uint8_t anim_frame = state->titlescreen_continue_prompt_anim_frame;
 
@@ -839,6 +851,7 @@ static void handle_titlescreen(GameState *state) {
         case 3:
             /* Func_c1cb (0xc1cb): Transition to selected screen.
              * N5: ASM calls FadeOut + DisableLCD. */
+            handle_titlescreen_animations(state);
             if (state->fade_direction != 1) {
                 audio_stop_all(state->audio);
                 start_screen_fade_out(state);
@@ -857,6 +870,7 @@ static void handle_titlescreen(GameState *state) {
         case 4:
             /* GoToHighScoresFromTitlescreen (0xc1e7)
              * N5: ASM calls FadeOut + DisableLCD. */
+            handle_titlescreen_animations(state);
             if (state->fade_direction != 1) {
                 start_screen_fade_out(state);
                 break;
@@ -873,6 +887,7 @@ static void handle_titlescreen(GameState *state) {
              * ASM: MUSIC_NOTHING played on entry (state 1 or 2), then
              * 1 frame passes (the entry frame counts as that), SFX $00/$27
              * is played on the first frame here, then we count down. */
+            handle_titlescreen_animations(state);
             if (game_start_sfx_delay == 0x37 || game_start_sfx_delay == 0x41) {
                 /* First frame: play the Game Start SFX */
                 PLAY_SFX(state, "new_ball", 0x00, 0x27);
@@ -3405,15 +3420,525 @@ static const uint8_t starting_stages[] = {
     STAGE_BLUE_FIELD_BOTTOM,
 };
 
+/*=============================================================================
+ * Dynamic Field Select - Table Discovery and Preview Loading
+ *
+ * Scans tables/{name}/manifest.json for type=="main_field" entries.
+ * Builtins (Red/Blue Field) are always at indices 0/1.
+ * Custom tables append at index 2+.
+ *===========================================================================*/
+
+/*
+ * Scan the tables/ directory for main_field manifests.
+ * Populates state->field_select with discovered tables.
+ */
+static void field_select_scan_tables(GameState *state) {
+    FieldSelectState *fs = &state->field_select;
+    if (fs->scanned) return;
+
+    memset(fs->tables, 0, sizeof(fs->tables));
+    fs->num_tables = 0;
+
+    /* Always add builtins at indices 0 and 1 */
+    FieldSelectEntry *red = &fs->tables[0];
+    strncpy(red->name, "Red Field", sizeof(red->name) - 1);
+    strncpy(red->folder, "red_field", sizeof(red->folder) - 1);
+    red->starting_stage = STAGE_RED_FIELD_BOTTOM;
+    red->is_builtin = true;
+
+    FieldSelectEntry *blue = &fs->tables[1];
+    strncpy(blue->name, "Blue Field", sizeof(blue->name) - 1);
+    strncpy(blue->folder, "blue_field", sizeof(blue->folder) - 1);
+    blue->starting_stage = STAGE_BLUE_FIELD_BOTTOM;
+    blue->is_builtin = true;
+
+    fs->num_tables = 2;
+    fs->has_custom_tables = false;
+
+#ifdef _WIN32
+    /* Scan tables/ directory for subfolders with manifest.json */
+    char search_path[520];
+    snprintf(search_path, sizeof(search_path), "%stables\\*",
+             state->asset_base_path);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE hFind = FindFirstFileA(search_path, &fd);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        fs->scanned = true;
+        return;
+    }
+
+    do {
+        /* Skip non-directories and . / .. */
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+        if (fd.cFileName[0] == '.') continue;
+
+        /* Skip known builtins (already added) */
+        if (strcmp(fd.cFileName, "red_field") == 0 ||
+            strcmp(fd.cFileName, "blue_field") == 0) {
+            /* Check if builtins have custom preview overrides */
+            char manifest_path[520];
+            snprintf(manifest_path, sizeof(manifest_path),
+                     "%stables/%s/manifest.json",
+                     state->asset_base_path, fd.cFileName);
+            FILE *f = fopen(manifest_path, "rb");
+            if (f) {
+                fseek(f, 0, SEEK_END);
+                long sz = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                char *json = (char *)malloc(sz + 1);
+                if (json) {
+                    fread(json, 1, sz, f);
+                    json[sz] = '\0';
+                    cJSON *root = cJSON_Parse(json);
+                    if (root) {
+                        /* Check for preview override on builtin */
+                        int idx = (strcmp(fd.cFileName, "red_field") == 0) ? 0 : 1;
+                        FieldSelectEntry *entry = &fs->tables[idx];
+
+                        cJSON *preview = cJSON_GetObjectItem(root, "preview");
+                        if (preview && cJSON_IsString(preview)) {
+                            snprintf(entry->preview_path,
+                                     sizeof(entry->preview_path),
+                                     "%stables/%s/%s",
+                                     state->asset_base_path,
+                                     fd.cFileName,
+                                     preview->valuestring);
+                            entry->has_preview = true;
+                            fs->has_custom_tables = true;
+                        }
+
+                        cJSON *pal = cJSON_GetObjectItem(root, "preview_palette");
+                        if (pal && cJSON_IsArray(pal) &&
+                            cJSON_GetArraySize(pal) == 4) {
+                            for (int c = 0; c < 4; c++) {
+                                cJSON *color = cJSON_GetArrayItem(pal, c);
+                                if (color && cJSON_IsArray(color) &&
+                                    cJSON_GetArraySize(color) == 3) {
+                                    int r = cJSON_GetArrayItem(color, 0)->valueint;
+                                    int g = cJSON_GetArrayItem(color, 1)->valueint;
+                                    int b = cJSON_GetArrayItem(color, 2)->valueint;
+                                    entry->palette[c] = (uint16_t)(
+                                        (r & 0x1F) |
+                                        ((g & 0x1F) << 5) |
+                                        ((b & 0x1F) << 10));
+                                }
+                            }
+                            entry->has_palette = true;
+                            fs->has_custom_tables = true;
+                        }
+
+                        cJSON_Delete(root);
+                    }
+                    free(json);
+                }
+                fclose(f);
+            }
+            continue;
+        }
+
+        /* Skip non-main_field bonus stage folders */
+        if (strcmp(fd.cFileName, "gengar_bonus") == 0 ||
+            strcmp(fd.cFileName, "mewtwo_bonus") == 0 ||
+            strcmp(fd.cFileName, "meowth_bonus") == 0 ||
+            strcmp(fd.cFileName, "diglett_bonus") == 0 ||
+            strcmp(fd.cFileName, "seel_bonus") == 0)
+            continue;
+
+        if (fs->num_tables >= MAX_FIELD_SELECT_TABLES) {
+            fprintf(stderr, "[FieldSelect] Too many tables (max %d), "
+                    "ignoring '%s'\n", MAX_FIELD_SELECT_TABLES, fd.cFileName);
+            continue;
+        }
+
+        /* Read this folder's manifest.json */
+        char manifest_path[520];
+        snprintf(manifest_path, sizeof(manifest_path),
+                 "%stables/%s/manifest.json",
+                 state->asset_base_path, fd.cFileName);
+
+        FILE *f = fopen(manifest_path, "rb");
+        if (!f) continue;
+
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char *json = (char *)malloc(sz + 1);
+        if (!json) { fclose(f); continue; }
+        fread(json, 1, sz, f);
+        json[sz] = '\0';
+        fclose(f);
+
+        cJSON *root = cJSON_Parse(json);
+        free(json);
+        if (!root) continue;
+
+        /* Only accept type == "main_field" */
+        cJSON *type = cJSON_GetObjectItem(root, "type");
+        if (!type || !cJSON_IsString(type) ||
+            strcmp(type->valuestring, "main_field") != 0) {
+            cJSON_Delete(root);
+            continue;
+        }
+
+        FieldSelectEntry *entry = &fs->tables[fs->num_tables];
+        memset(entry, 0, sizeof(*entry));
+
+        /* Name */
+        cJSON *name = cJSON_GetObjectItem(root, "name");
+        if (name && cJSON_IsString(name))
+            strncpy(entry->name, name->valuestring,
+                    sizeof(entry->name) - 1);
+        else
+            strncpy(entry->name, fd.cFileName, sizeof(entry->name) - 1);
+
+        strncpy(entry->folder, fd.cFileName, sizeof(entry->folder) - 1);
+
+        /* Starting stage: read from stages.bottom.id */
+        entry->starting_stage = STAGE_RED_FIELD_BOTTOM; /* fallback */
+        cJSON *stages = cJSON_GetObjectItem(root, "stages");
+        if (stages) {
+            cJSON *bottom = cJSON_GetObjectItem(stages, "bottom");
+            if (bottom) {
+                cJSON *sid = cJSON_GetObjectItem(bottom, "id");
+                if (sid && cJSON_IsNumber(sid))
+                    entry->starting_stage = (uint8_t)sid->valueint;
+            }
+        }
+
+        /* Preview PNG */
+        cJSON *preview = cJSON_GetObjectItem(root, "preview");
+        if (preview && cJSON_IsString(preview)) {
+            snprintf(entry->preview_path, sizeof(entry->preview_path),
+                     "%stables/%s/%s",
+                     state->asset_base_path,
+                     fd.cFileName,
+                     preview->valuestring);
+            entry->has_preview = true;
+        }
+
+        /* Preview palette */
+        cJSON *pal = cJSON_GetObjectItem(root, "preview_palette");
+        if (pal && cJSON_IsArray(pal) && cJSON_GetArraySize(pal) == 4) {
+            for (int c = 0; c < 4; c++) {
+                cJSON *color = cJSON_GetArrayItem(pal, c);
+                if (color && cJSON_IsArray(color) &&
+                    cJSON_GetArraySize(color) == 3) {
+                    int r = cJSON_GetArrayItem(color, 0)->valueint;
+                    int g = cJSON_GetArrayItem(color, 1)->valueint;
+                    int b = cJSON_GetArrayItem(color, 2)->valueint;
+                    entry->palette[c] = (uint16_t)(
+                        (r & 0x1F) |
+                        ((g & 0x1F) << 5) |
+                        ((b & 0x1F) << 10));
+                }
+            }
+            entry->has_palette = true;
+        }
+
+        entry->is_builtin = false;
+        fs->num_tables++;
+        fs->has_custom_tables = true;
+
+        printf("[FieldSelect] Found custom table: '%s' (stage %d)\n",
+               entry->name, entry->starting_stage);
+
+        cJSON_Delete(root);
+    } while (FindNextFileA(hFind, &fd));
+
+    FindClose(hFind);
+#endif /* _WIN32 */
+
+    fs->scanned = true;
+    printf("[FieldSelect] %d table(s) found, custom=%d\n",
+           fs->num_tables, fs->has_custom_tables);
+}
+
+/*
+ * Save the original tilemap/bgattr entries for both preview regions.
+ * Called once after the baked field_select assets are loaded into VRAM.
+ */
+static void field_select_save_originals(GameState *state) {
+    FieldSelectState *fs = &state->field_select;
+    if (fs->originals_saved) return;
+
+    VirtualVRAM *vram = state->vram;
+    if (!vram) return;
+
+    for (int row = 0; row < FS_SAVE_NUM_ROWS; row++) {
+        for (int col = 0; col < FS_PREVIEW_NUM_COLS; col++) {
+            int idx = row * FS_PREVIEW_NUM_COLS + col;
+
+            /* Left preview + border + label */
+            int left_off = (FS_PREVIEW_START_ROW + row) * 32 +
+                           (FS_PREVIEW_LEFT_COL + col);
+            fs->orig_left_tilemap[idx] = vram->bg_map[0][left_off];
+            fs->orig_left_bgattr[idx]  = vram->bg_map[1][left_off];
+
+            /* Right preview + border + label */
+            int right_off = (FS_PREVIEW_START_ROW + row) * 32 +
+                            (FS_PREVIEW_RIGHT_COL + col);
+            fs->orig_right_tilemap[idx] = vram->bg_map[0][right_off];
+            fs->orig_right_bgattr[idx]  = vram->bg_map[1][right_off];
+        }
+    }
+
+    fs->originals_saved = true;
+}
+
+/*
+ * Convert a signed tile index (for LCDC mode $43, bit 4=0) to a
+ * VRAM address in the $8000-$97FF range.
+ */
+static uint16_t signed_tile_addr(uint8_t index) {
+    return (uint16_t)(0x9000 + (int8_t)index * 16);
+}
+
+/*
+ * Write a preview image's tiles into VRAM bank 1, remapping from
+ * the PNG's tile layout (src_cols tiles per row) to the display
+ * layout (FS_PREVIEW_NUM_COLS tiles per row).
+ *
+ * slot 0 = left preview (base index 0x00)
+ * slot 1 = right preview (base index 0x7E)
+ */
+static void write_preview_tiles_to_vram(VirtualVRAM *vram, int slot,
+                                         const uint8_t *tile_data,
+                                         int src_cols, int src_rows) {
+    uint8_t base_index = (slot == 0) ? 0x00 : 0x7E;
+    int dst_cols = FS_PREVIEW_NUM_COLS;
+    int dst_rows = FS_SAVE_NUM_ROWS;
+    uint8_t blank[16] = {0};
+
+    for (int row = 0; row < dst_rows; row++) {
+        for (int col = 0; col < dst_cols; col++) {
+            int dst_idx = row * dst_cols + col;
+            uint8_t tile_idx = (uint8_t)(base_index + dst_idx);
+            uint16_t addr = signed_tile_addr(tile_idx);
+
+            if (row < src_rows && col < src_cols) {
+                int src_idx = row * src_cols + col;
+                vram_write(vram, 1, addr, tile_data + src_idx * 16, 16);
+            } else {
+                vram_write(vram, 1, addr, blank, 16);
+            }
+        }
+    }
+}
+
+/*
+ * Patch the tilemap for one preview slot to show custom tiles from bank 1.
+ * Covers all 13 rows (preview + border + label, rows 3-15).
+ */
+static void patch_preview_custom(GameState *state, int slot, uint8_t bg_palette) {
+    VirtualVRAM *vram = state->vram;
+    int start_col = (slot == 0) ? FS_PREVIEW_LEFT_COL : FS_PREVIEW_RIGHT_COL;
+    uint8_t base_index = (slot == 0) ? 0x00 : 0x7E;
+
+    for (int row = 0; row < FS_SAVE_NUM_ROWS; row++) {
+        for (int col = 0; col < FS_PREVIEW_NUM_COLS; col++) {
+            int map_off = (FS_PREVIEW_START_ROW + row) * 32 +
+                          (start_col + col);
+            int idx = row * FS_PREVIEW_NUM_COLS + col;
+            vram->bg_map[0][map_off] = (uint8_t)(base_index + idx);
+            vram->bg_map[1][map_off] = 0x08 | (bg_palette & 0x07);
+        }
+    }
+}
+
+/*
+ * Restore a slot's tilemap/bgattr from saved originals.
+ * Covers all 13 rows (preview + border bottom + label, rows 3-15).
+ * source_slot selects WHICH originals to use:
+ *   0 = left originals (Red Field's native data)
+ *   1 = right originals (Blue Field's native data)
+ */
+static void restore_preview_slot(GameState *state, int target_slot,
+                                   int source_slot) {
+    VirtualVRAM *vram = state->vram;
+    FieldSelectState *fs = &state->field_select;
+    int start_col = (target_slot == 0) ? FS_PREVIEW_LEFT_COL
+                                        : FS_PREVIEW_RIGHT_COL;
+    const uint8_t *src_tilemap = (source_slot == 0)
+        ? fs->orig_left_tilemap : fs->orig_right_tilemap;
+    const uint8_t *src_bgattr = (source_slot == 0)
+        ? fs->orig_left_bgattr : fs->orig_right_bgattr;
+
+    for (int row = 0; row < FS_SAVE_NUM_ROWS; row++) {
+        for (int col = 0; col < FS_PREVIEW_NUM_COLS; col++) {
+            int map_off = (FS_PREVIEW_START_ROW + row) * 32 +
+                          (start_col + col);
+            int idx = row * FS_PREVIEW_NUM_COLS + col;
+            vram->bg_map[0][map_off] = src_tilemap[idx];
+            vram->bg_map[1][map_off] = src_bgattr[idx];
+        }
+    }
+}
+
+/*
+ * Load preview images for the two currently visible slots.
+ * Called when visible_offset changes or on first load with custom tables.
+ */
+static void field_select_load_previews(GameState *state) {
+    FieldSelectState *fs = &state->field_select;
+    VirtualVRAM *vram = state->vram;
+    if (!vram) return;
+
+    for (int slot = 0; slot < 2; slot++) {
+        int table_idx = fs->visible_offset + slot;
+
+        if (table_idx >= fs->num_tables) {
+            /* No table in this slot — show blank */
+            write_preview_tiles_to_vram(vram, slot, NULL, 0, 0);
+            patch_preview_custom(state, slot, 3);
+
+            /* Set palette 3 to grayscale */
+            state->bg_palettes[3].colors[0] = 0x7FFF;
+            state->bg_palettes[3].colors[1] = 0x56B5;
+            state->bg_palettes[3].colors[2] = 0x294A;
+            state->bg_palettes[3].colors[3] = 0x0000;
+            continue;
+        }
+
+        FieldSelectEntry *entry = &fs->tables[table_idx];
+
+        if (entry->is_builtin && !entry->has_preview) {
+            /* Builtin: restore from its native slot's originals.
+             * Red (table 0) → native slot 0 (left originals)
+             * Blue (table 1) → native slot 1 (right originals)
+             * This handles the case where Blue is in the left slot
+             * or Red is in the right slot after scrolling. */
+            int native_slot = table_idx;  /* 0=Red, 1=Blue */
+            restore_preview_slot(state, slot, native_slot);
+        } else if (entry->has_preview) {
+            /* Get PNG dimensions for tile remapping */
+            int png_w = 0, png_h = 0, png_comp = 0;
+            stbi_info(entry->preview_path, &png_w, &png_h, &png_comp);
+            int src_cols = png_w / 8;
+            int src_rows = png_h / 8;
+            if (src_cols < 1) src_cols = FS_PREVIEW_NUM_COLS;
+            if (src_rows < 1) src_rows = FS_SAVE_NUM_ROWS;
+
+            /* Load custom preview PNG */
+            size_t tile_size = 0;
+            uint8_t *tile_data = tiles_from_png(entry->preview_path,
+                                                &tile_size);
+            if (tile_data) {
+                write_preview_tiles_to_vram(vram, slot, tile_data,
+                                            src_cols, src_rows);
+                free(tile_data);
+            } else {
+                /* Preview load failed — fill with placeholder */
+                fprintf(stderr, "[FieldSelect] Failed to load preview: %s\n",
+                        entry->preview_path);
+                write_preview_tiles_to_vram(vram, slot, NULL, 0, 0);
+            }
+
+            /* Use custom palette or default grayscale */
+            uint8_t pal_idx = (slot == 0) ? 3 : 4;
+            if (entry->has_palette) {
+                for (int c = 0; c < 4; c++)
+                    state->bg_palettes[pal_idx].colors[c] =
+                        entry->palette[c];
+            } else {
+                /* Grayscale fallback */
+                state->bg_palettes[pal_idx].colors[0] = 0x7FFF;
+                state->bg_palettes[pal_idx].colors[1] = 0x56B5;
+                state->bg_palettes[pal_idx].colors[2] = 0x294A;
+                state->bg_palettes[pal_idx].colors[3] = 0x0000;
+            }
+            patch_preview_custom(state, slot, pal_idx);
+        } else {
+            /* Custom table without preview — blank placeholder */
+            write_preview_tiles_to_vram(vram, slot, NULL, 0, 0);
+
+            uint8_t pal_idx = (slot == 0) ? 3 : 4;
+            state->bg_palettes[pal_idx].colors[0] = 0x7FFF;
+            state->bg_palettes[pal_idx].colors[1] = 0x56B5;
+            state->bg_palettes[pal_idx].colors[2] = 0x294A;
+            state->bg_palettes[pal_idx].colors[3] = 0x0000;
+            patch_preview_custom(state, slot, pal_idx);
+        }
+    }
+
+    fs->needs_reload = false;
+}
+
+/*
+ * Load the high-scores arrow tiles into VRAM and set OBJ palette 1 to yellow.
+ * Tiles 0x7A-0x7D are the same indices used by the high scores screen arrows.
+ * Called once during field select init when custom tables are present.
+ */
+static void field_select_load_arrow_tiles(GameState *state) {
+    /* Load arrow tiles from the high scores base PNG into tile slots 0x7A-0x7D.
+     * The high_scores_base_gameboy.png contains these arrow tiles. */
+    char path[512];
+    snprintf(path, sizeof(path), "%sgfx/high_scores/high_scores_base_gameboy.png",
+             state->asset_base_path);
+    size_t tile_count = 0;
+    uint8_t *tiles = tiles_from_png(path, &tile_count);
+    if (tiles && tile_count > 0x7D) {
+        /* Write tiles 0x7A-0x7D (4 tiles, 64 bytes) */
+        vram_write(state->vram, 0, 0x8000 + 0x7A * 16,
+                   tiles + 0x7A * 16, 4 * 16);
+        free(tiles);
+    } else {
+        if (tiles) free(tiles);
+    }
+
+    /* Set OBJ palette 1 to the high-scores yellow arrow palette */
+    state->obj_palettes[1].colors[0] = 0x7FFF;  /* RGB(31,31,31) white */
+    state->obj_palettes[1].colors[1] = 0x13BF;  /* RGB(31,29, 4) yellow */
+    state->obj_palettes[1].colors[2] = 0x025D;  /* RGB(29,18, 0) dark gold */
+    state->obj_palettes[1].colors[3] = 0x0000;  /* RGB( 0, 0, 0) black */
+}
+
+/*
+ * Draw scroll indicator arrows using the 4-sprite high-scores arrow composites.
+ * Bounces with a 40-frame cycle matching the high scores style.
+ */
+static void field_select_draw_scroll_arrows(GameState *state) {
+    FieldSelectState *fs = &state->field_select;
+
+    /* Advance bounce counter (40-frame cycle) */
+    uint8_t counter = state->high_scores_arrow_anim_counter;
+    counter++;
+    if (counter >= 0x28) counter = 0;
+    state->high_scores_arrow_anim_counter = counter;
+
+    /* Y base centers the arrow vertically with the preview area (rows 3-12).
+     * Arrow visual span = base to base+16, center = base+8.
+     * Preview center = screen Y 60, so base = 52 = 0x34. */
+    const uint8_t arrow_y = 0x34;
+
+    /* X bases from the high-scores offset tables — same screen-edge positions
+     * with the proper heartbeat bounce animation (40-frame cycle). */
+    if (fs->visible_offset > 0) {
+        uint8_t x = hs_left_arrow_x_offsets[counter];
+        load_sprite_data(state, sprite_hs_arrow_left, arrow_y, x);
+    }
+
+    if (fs->visible_offset + 2 < fs->num_tables) {
+        uint8_t x = hs_right_arrow_x_offsets[counter];
+        load_sprite_data(state, sprite_hs_arrow_right, arrow_y, x);
+    }
+}
+
 static void handle_field_select_screen(GameState *state) {
     /*
      * HandleFieldSelectScreen (0xd6d3):
-     * Choose between Red Field and Blue Field.
+     * Choose a field to play. Supports dynamic table discovery.
      *
-     * State 0: LoadFieldSelectScreen - load graphics, init
-     * State 1: ChooseFieldToPlay - cursor + blinking border
+     * When only 2 builtin tables with no custom previews: pixel-identical
+     * to original. When custom tables exist: dynamic preview loading with
+     * LEFT/RIGHT scrolling.
+     *
+     * State 0: LoadFieldSelectScreen - load graphics, scan tables, init
+     * State 1: ChooseFieldToPlay - cursor + blinking border + scrolling
      * State 2: ExitFieldSelectScreen - confirmation blink, then transition
      */
+    FieldSelectState *fs = &state->field_select;
+
     switch (state->screen_state) {
         case 0:
             /* LoadFieldSelectScreen (0xd6dd) */
@@ -3423,29 +3948,74 @@ static void handle_field_select_screen(GameState *state) {
                 load_screen_assets(SCREEN_FIELD_SELECT, state->vram,
                                    state, state->asset_base_path);
                 state->hram.lcdc = 0x43;
-                /* LoadFieldSelectScreen: xor a; ldh [hSCX/hSCY], a */
                 state->hram.scx = 0;
                 state->hram.scy = 0;
                 state->gfx_loaded = 1;
+
+                /* Scan for custom tables */
+                field_select_scan_tables(state);
+
+                /* Re-save originals from the freshly-loaded baked tilemap */
+                fs->originals_saved = false;
+                field_select_save_originals(state);
+
+                /* If custom tables exist, load preview images and arrow tiles */
+                if (fs->has_custom_tables) {
+                    field_select_load_previews(state);
+                    field_select_load_arrow_tiles(state);
+                }
             }
+            fs->cursor_index = 0;
+            fs->visible_offset = 0;
             state->selected_field_index = 0;
             state->field_select_blinking_border_frame = 8;
             state->field_select_border_anim_step = 0;
-            /* Play field select music (Music_FieldSelect: bank $12, id $03) */
+            state->high_scores_arrow_anim_counter = 0;
             PLAY_MUSIC(state, "field_select", 0x12, 0x03);
             state->screen_state = 1;
             break;
         case 1: {
             /* ChooseFieldToPlay (0xd74e):
-             * MoveFieldSelectCursor uses hPressedButtons for L/R navigation.
+             * L/R navigation with scrolling support for 3+ tables.
              * A or B pressed → go to state 2 with confirmation blink. */
             uint8_t buttons = state->hram.pressed_buttons;
-            if ((buttons & BTN_LEFT) && state->selected_field_index > 0) {
-                state->selected_field_index = 0;
+            uint8_t old_cursor = fs->cursor_index;
+            uint8_t old_offset = fs->visible_offset;
+
+            if ((buttons & BTN_LEFT) && fs->cursor_index > 0) {
+                fs->cursor_index--;
                 PLAY_SFX(state, "field_select_left", 0x00, 0x3C);
-            } else if ((buttons & BTN_RIGHT) && state->selected_field_index < 1) {
-                state->selected_field_index = 1;
+
+                /* Scroll left if cursor moved before visible window */
+                if (fs->cursor_index < fs->visible_offset)
+                    fs->visible_offset = fs->cursor_index;
+            } else if ((buttons & BTN_RIGHT) &&
+                       fs->cursor_index < fs->num_tables - 1) {
+                fs->cursor_index++;
                 PLAY_SFX(state, "field_select_right", 0x00, 0x3D);
+
+                /* Scroll right if cursor moved past visible window */
+                if (fs->cursor_index > fs->visible_offset + 1)
+                    fs->visible_offset = fs->cursor_index - 1;
+            }
+
+            /* Reload previews if visible window changed */
+            if (fs->visible_offset != old_offset && fs->has_custom_tables) {
+                fs->needs_reload = true;
+            }
+
+            if (fs->needs_reload) {
+                field_select_load_previews(state);
+            }
+
+            /* Compute local slot (0 or 1) for border sprite position */
+            uint8_t local_slot = fs->cursor_index - fs->visible_offset;
+            if (local_slot > 1) local_slot = 1;
+            state->selected_field_index = local_slot;
+
+            /* Draw scroll arrows when more than 2 tables exist */
+            if (fs->num_tables > 2) {
+                field_select_draw_scroll_arrows(state);
             }
 
             animate_field_select_border(state, false);
@@ -3463,14 +4033,13 @@ static void handle_field_select_screen(GameState *state) {
         case 2:
             /* ExitFieldSelectScreen (0xd774) */
             if (state->field_select_pressed_button & BTN_A) {
-                /* Animate confirmation border and count down */
                 animate_field_select_border(state, true);
                 if (state->field_select_blinking_border_timer > 0) {
                     state->field_select_blinking_border_timer--;
                     break;
                 }
             }
-            /* N5: Transition with FadeOut */
+            /* Transition with FadeOut */
             if (state->fade_direction != 1) {
                 start_screen_fade_out(state);
                 break;
@@ -3478,9 +4047,12 @@ static void handle_field_select_screen(GameState *state) {
             if (state->fade_counter > 0) break;
             state->fade_direction = 0;
             if (state->field_select_pressed_button & BTN_A) {
-                uint8_t idx = state->selected_field_index;
-                if (idx > 1) idx = 0;
-                state->current_stage = starting_stages[idx];
+                /* Use the selected table's starting stage */
+                uint8_t table_idx = fs->cursor_index;
+                if (table_idx >= fs->num_tables)
+                    table_idx = 0;
+                state->current_stage =
+                    fs->tables[table_idx].starting_stage;
                 state->saved_game = 0;
                 save_game(state);
                 state->loading_saved_game = 0;

@@ -294,7 +294,7 @@ enum PokemonId {
 #define GBC_TILES_PER_COL  18  /* 144 / 8 */
 #define GBC_TILEMAP_W      32
 #define GBC_TILEMAP_H      32
-#define GBC_OAM_ENTRIES    40
+#define GBC_OAM_ENTRIES    64
 #define GBC_BYTES_PER_TILE 16  /* 2bpp: 8 rows x 2 bytes */
 
 #define GBC_NUM_BG_PALETTES   8

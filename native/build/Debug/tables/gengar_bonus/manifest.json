@@ -1,0 +1,10 @@
+{
+  "name": "Gengar Bonus Stage",
+  "type": "bonus_stage",
+  "stage_id": 7,
+  "scripts": [
+    {
+      "path": "scripts/main.lua"
+    }
+  ]
+}

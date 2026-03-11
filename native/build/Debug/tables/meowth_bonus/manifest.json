@@ -1,0 +1,10 @@
+{
+  "name": "Meowth Bonus Stage",
+  "type": "bonus_stage",
+  "stage_id": 11,
+  "scripts": [
+    {
+      "path": "scripts/main.lua"
+    }
+  ]
+}

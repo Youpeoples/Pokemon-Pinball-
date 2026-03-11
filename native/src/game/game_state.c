@@ -26,8 +26,10 @@ void game_state_reset(GameState *state) {
     VirtualVRAM *saved_vram = state->vram;
     AudioEngine *saved_audio = state->audio;
     ConfigData *saved_config = state->config;
+    ScriptEngine *saved_script_engine = state->script_engine;
     uint8_t *saved_vwf_font_gfx = state->vwf_font_gfx;
     uint8_t *saved_slot_force_field_data = state->slot_force_field_data;
+    uint8_t saved_debug_mode = state->debug_mode;
     char saved_asset_base_path[260];
     memcpy(saved_asset_base_path, state->asset_base_path, sizeof(saved_asset_base_path));
 
@@ -38,8 +40,10 @@ void game_state_reset(GameState *state) {
     state->vram = saved_vram;
     state->audio = saved_audio;
     state->config = saved_config;
+    state->script_engine = saved_script_engine;
     state->vwf_font_gfx = saved_vwf_font_gfx;
     state->slot_force_field_data = saved_slot_force_field_data;
+    state->debug_mode = saved_debug_mode;
     memcpy(state->asset_base_path, saved_asset_base_path, sizeof(state->asset_base_path));
 
     /* Set GBC flag - we're always running in GBC mode */

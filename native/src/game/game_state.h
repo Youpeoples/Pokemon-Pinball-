@@ -8,6 +8,48 @@
 typedef struct VirtualVRAM VirtualVRAM;
 typedef struct AudioEngine AudioEngine;
 typedef struct ConfigData ConfigData;
+typedef struct ScriptEngine ScriptEngine;
+
+/*=============================================================================
+ * Field Select - Dynamic Table Discovery
+ *===========================================================================*/
+#define MAX_FIELD_SELECT_TABLES 16
+
+/* Preview region constants (tiles) */
+#define FS_PREVIEW_START_ROW   2    /* Start at border top (row 2) */
+#define FS_PREVIEW_NUM_COLS    9    /* 72px wide (border + 7 content + border) */
+#define FS_PREVIEW_LEFT_COL    1    /* Left slot border-left column */
+#define FS_PREVIEW_RIGHT_COL   10   /* Right slot border-left column */
+#define FS_SAVE_NUM_ROWS       14   /* Saved area: rows 2-15 (border + preview + label) */
+#define FS_SAVE_NUM_TILES      126  /* 9 x 14 */
+
+typedef struct FieldSelectEntry {
+    char name[32];           /* Display name from manifest */
+    char folder[64];         /* Folder name (e.g., "my_table") */
+    uint8_t starting_stage;  /* Bottom stage ID to start playing */
+    bool is_builtin;         /* true for Red/Blue Field */
+    bool has_preview;        /* true if preview PNG exists */
+    char preview_path[260];  /* Full path to preview PNG */
+    bool has_palette;        /* true if custom palette specified */
+    uint16_t palette[4];     /* RGB555 custom preview palette */
+} FieldSelectEntry;
+
+typedef struct FieldSelectState {
+    FieldSelectEntry tables[MAX_FIELD_SELECT_TABLES];
+    uint8_t num_tables;
+    uint8_t cursor_index;      /* Currently selected table index */
+    uint8_t visible_offset;    /* Index of table in left visible slot */
+    bool needs_reload;         /* True when visible slots changed */
+    bool scanned;              /* True after initial scan */
+    bool has_custom_tables;    /* True if any non-builtin tables found */
+
+    /* Saved original tilemap/bgattr for preview + border + label regions */
+    uint8_t orig_left_tilemap[FS_SAVE_NUM_TILES];
+    uint8_t orig_left_bgattr[FS_SAVE_NUM_TILES];
+    uint8_t orig_right_tilemap[FS_SAVE_NUM_TILES];
+    uint8_t orig_right_bgattr[FS_SAVE_NUM_TILES];
+    bool originals_saved;
+} FieldSelectState;
 
 /*=============================================================================
  * HRAM State
@@ -830,6 +872,17 @@ typedef struct GameState {
 
     /* --- External config data (not in original GBC) --- */
     ConfigData *config;             /* JSON-loaded config (physics, scores, tables, pokemon) */
+
+    /* --- Dynamic field select (not in original GBC) --- */
+    FieldSelectState field_select;  /* Dynamic table discovery for field select screen */
+
+    /* --- Lua scripting engine (not in original GBC) --- */
+    ScriptEngine *script_engine;    /* Lua scripting engine for moddable table logic */
+
+    /* --- Debug overlay (not in original GBC) --- */
+    uint8_t debug_mode;             /* F1 toggles: 0=off, 1=text overlay */
+    float debug_fps;                /* Measured FPS (updated once per second) */
+    uint8_t debug_sprite_count;     /* Number of active OAM sprites this frame */
 
     /* --- Native renderer state (not in original GBC) --- */
     VirtualVRAM *vram;              /* Virtual VRAM for tile/map data */

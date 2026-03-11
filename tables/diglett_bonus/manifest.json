@@ -1,0 +1,10 @@
+{
+  "name": "Diglett Bonus Stage",
+  "type": "bonus_stage",
+  "stage_id": 13,
+  "scripts": [
+    {
+      "path": "scripts/main.lua"
+    }
+  ]
+}
