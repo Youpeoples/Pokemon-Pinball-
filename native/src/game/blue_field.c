@@ -241,6 +241,46 @@ static const uint8_t bonus_stages_blue[] = {
     STAGE_DIGLETT_BONUS, STAGE_SEEL_BONUS
 };
 
+/*=============================================================================
+ * ShowScrollingGoToBonusText_BlueField (0x1e8c3)
+ * ASM checks Meowth, Seel, default=Mewtwo. Uses scrolling_text_normal headers.
+ *===========================================================================*/
+static void show_scrolling_go_to_bonus_text_blue(GameState *state) {
+    fill_bottom_message_buffer_with_black_tile(state);
+    enable_bottom_text(state);
+
+    const char *text;
+    uint8_t header[6];
+    uint8_t next = state->next_stage;
+
+    if (next == STAGE_MEOWTH_BONUS) {
+        text = "GO TO MEOWTH STAGE";
+        /* scrolling_text_normal 1, 20, 0, 20 */
+        header[0]=5; header[1]=0x54; header[2]=0x41; header[3]=20; header[4]=0; header[5]=59;
+    } else if (next == STAGE_SEEL_BONUS) {
+        text = "GO TO SEEL STAGE";
+        /* scrolling_text_normal 2, 20, 0, 19 */
+        header[0]=5; header[1]=0x54; header[2]=0x42; header[3]=20; header[4]=0; header[5]=57;
+    } else if (next == STAGE_DIGLETT_BONUS) {
+        text = "GO TO DIGLETT STAGE";
+        /* scrolling_text_normal 0, 20, 0, 20 */
+        header[0]=5; header[1]=0x54; header[2]=0x40; header[3]=20; header[4]=0; header[5]=60;
+    } else if (next == STAGE_GENGAR_BONUS) {
+        text = "GO TO GENGAR STAGE";
+        /* scrolling_text_normal 1, 20, 0, 20 */
+        header[0]=5; header[1]=0x54; header[2]=0x41; header[3]=20; header[4]=0; header[5]=59;
+    } else {
+        text = "GO TO MEWTWO STAGE";
+        /* scrolling_text_normal 1, 20, 0, 20 */
+        header[0]=5; header[1]=0x54; header[2]=0x41; header[3]=20; header[4]=0; header[5]=59;
+    }
+
+    load_scrolling_text(state, 2, header, text);
+
+    audio_stop_all(state->audio);
+    PLAY_SFX(state, "bonus_stage_enter", 0x3C, 0x23);
+}
+
 /* Ball type progression/degradation for blue field */
 static const uint8_t ball_type_progression_blue[] = {
     GREAT_BALL, GREAT_BALL, ULTRA_BALL, MASTER_BALL, MASTER_BALL, MASTER_BALL
@@ -319,7 +359,7 @@ static void update_force_field_direction(GameState *state);
 static void update_force_field_graphics(GameState *state);
 static void resolve_psyduck_poliwag_collision(GameState *state);
 static void open_slot_cave_blue(GameState *state);
-static void update_blinking_pokeballs_blue(GameState *state);
+static void update_pokeballs_blue(GameState *state);
 static void update_map_move_counters_top_blue(GameState *state);
 static void update_map_move_counters_bottom_blue(GameState *state);
 static void resolve_wild_mon_collision_blue(GameState *state);
@@ -589,19 +629,36 @@ void conclude_special_mode_blue_field(GameState *state) {
             load_billboard_tilemap(state);
             load_map_billboard_tile_data(state);
 
-            /* StageSharedBonusSlotGlowGfx+$60 → vTilesOB tile $20, $E0 bytes.
-             * Catch mode's billboard/pokemon sprites overwrite slot glow
-             * tiles at $8200+. Reload them from the PNG. */
+            /* StageSharedBonusSlotGlowGfx → vTilesOB tile $1A, $160 bytes.
+             * ASM (catchem_mode.asm:1410-1414): full reload of glow tiles.
+             * Catch mode's animated mon overwrites $81A0-$82FF. */
             {
                 char glow_path[260];
                 snprintf(glow_path, sizeof(glow_path), "%s/gfx/stage/shared/bonus_slot_glow.png",
                          state->asset_base_path);
                 size_t glow_size = 0;
                 uint8_t *glow_data = tiles_from_png(glow_path, &glow_size);
-                if (glow_data && glow_size >= 0x60 + 0xE0) {
-                    vram_write(state->vram, 0, 0x8200, glow_data + 0x60, 0xE0);
+                if (glow_data && glow_size >= 0x0160) {
+                    vram_write(state->vram, 0, 0x81A0, glow_data, 0x0160);
                 }
                 free(glow_data);
+            }
+
+            /* BonusSlotGlow2Gfx → vTilesOB tile $38 ($8380), $20 bytes.
+             * LoadShakeBallGfx during capture overwrites $8380-$83BF with
+             * ball shake tiles. Restore the slot glow frame 2 tile data. */
+            {
+                char path[260];
+                snprintf(path, sizeof(path), "%s/gfx/stage/shared/bonus_slot_glow_2.png",
+                         state->asset_base_path);
+                for (char *p = path; *p; p++) { if (*p == '/') *p = '\\'; }
+                size_t data_size = 0;
+                uint8_t *tile_data = tiles_from_png(path, &data_size);
+                if (tile_data) {
+                    uint16_t copy = (data_size < 0x20) ? (uint16_t)data_size : 0x20;
+                    vram_write(state->vram, 0, 0x8380, tile_data, copy);
+                    free(tile_data);
+                }
             }
 
             /* BlankSaverSpaceTileData: restore tiles at $8AE0, $8B00, $8B20 */
@@ -1026,7 +1083,7 @@ void resolve_blue_field_object_collisions(GameState *state) {
         update_force_field_direction(state);
         update_force_field_graphics(state);
         update_ball_saver(state);
-        update_blinking_pokeballs_blue(state);
+        update_pokeballs_blue(state);
         update_map_move_counters_top_blue(state);
         show_extra_ball_message(state);
         check_special_mode_collision(state, SPECIAL_COLLISION_NOTHING);
@@ -2276,19 +2333,7 @@ static void resolve_slot_collision_blue(GameState *state) {
             state->move_to_next_screen_state = 1;
             state->next_stage = bonus_stages_blue[state->next_bonus_stage];
 
-            /* Show bonus stage text */
-            fill_bottom_message_buffer_with_black_tile(state);
-            enable_bottom_text(state);
-            uint8_t stage = state->next_stage;
-            if (stage == STAGE_MEOWTH_BONUS)
-                load_scrolling_text(state, 2, "GO TO", "MEOWTH BONUS STAGE");
-            else if (stage == STAGE_SEEL_BONUS)
-                load_scrolling_text(state, 2, "GO TO", "SEEL BONUS STAGE");
-            else
-                load_scrolling_text(state, 2, "GO TO", "MEWTWO BONUS STAGE");
-
-            audio_stop_all(state->audio);
-            PLAY_SFX(state, "bonus_stage_enter", 0x3C, 0x23);
+            show_scrolling_go_to_bonus_text_blue(state);
             state->opened_slot_by_pokeballs = 0;
             state->catchem_or_evolution_slot_reward_active = 0;
             state->frames_until_slot_cave_opens = 30;
@@ -2346,18 +2391,7 @@ bonus_from_roulette:
     state->move_to_next_screen_state = 1;
     state->next_stage = bonus_stages_blue[state->next_bonus_stage];
 
-    fill_bottom_message_buffer_with_black_tile(state);
-    enable_bottom_text(state);
-    uint8_t stage2 = state->next_stage;
-    if (stage2 == STAGE_MEOWTH_BONUS)
-        load_scrolling_text(state, 2, "GO TO", "MEOWTH BONUS STAGE");
-    else if (stage2 == STAGE_SEEL_BONUS)
-        load_scrolling_text(state, 2, "GO TO", "SEEL BONUS STAGE");
-    else
-        load_scrolling_text(state, 2, "GO TO", "MEWTWO BONUS STAGE");
-
-    audio_stop_all(state->audio);
-    PLAY_SFX(state, "bonus_stage_enter", 0x3C, 0x23);
+    show_scrolling_go_to_bonus_text_blue(state);
     state->opened_slot_by_pokeballs = 0;
     state->catchem_or_evolution_slot_reward_active = 0;
     state->frames_until_slot_cave_opens = 30;
@@ -2886,22 +2920,46 @@ static void update_map_move_counters_bottom_blue(GameState *state) {
 /*=============================================================================
  * UpdatePokeballs/BlinkingPokeballs
  *===========================================================================*/
-static void update_blinking_pokeballs_blue(GameState *state) {
-    if (state->previous_num_pokeballs == state->num_pokeballs) return;
-    if (state->pokeball_blinking_counter > 0) {
-        state->pokeball_blinking_counter--;
-        if (state->pokeball_blinking_counter == 0) {
-            state->previous_num_pokeballs = state->num_pokeballs;
-            if (state->num_pokeballs >= 3) {
-                state->opened_slot_by_pokeballs = 1;
-                state->frames_until_slot_cave_opens = 3;
-            }
-        }
-    }
-}
-
+/* UpdatePokeballs_BlueField / UpdateBlinkingPokeballs_BlueField
+ * Matches red field's update_pokeballs (0x162f0 / 0x174ea):
+ * - Alternates old/new pokeball count display every 8 frames using bit 3
+ * - Calls load_pokeball_indicator_graphics to refresh tilemap */
 static void update_pokeballs_blue(GameState *state) {
-    update_blinking_pokeballs_blue(state);
+    if (state->previous_num_pokeballs == state->num_pokeballs)
+        return;
+
+    /* Counter not yet started: init to 0x40 (64 frames of blinking) */
+    if (state->pokeball_blinking_counter == 0)
+        state->pokeball_blinking_counter = 0x40;
+
+    state->pokeball_blinking_counter--;
+    if (state->pokeball_blinking_counter == 0) {
+        /* Blink done: finalize — set previous = current */
+        state->previous_num_pokeballs = state->num_pokeballs;
+        load_pokeball_indicator_graphics(state);
+        /* Check if 3 pokeballs collected → open slot */
+        if (state->num_pokeballs >= 3) {
+            state->opened_slot_by_pokeballs = 1;
+            state->frames_until_slot_cave_opens = 3;
+        }
+        return;
+    }
+
+    /* Still blinking: only update display every 8th frame */
+    if ((state->pokeball_blinking_counter & 7) != 0)
+        return;
+
+    /* Bit 3 of counter alternates between old and new count display */
+    if (state->pokeball_blinking_counter & 8) {
+        /* Display NEW count */
+        load_pokeball_indicator_graphics(state);
+    } else {
+        /* Display OLD count: temporarily swap in previous value */
+        uint8_t saved = state->num_pokeballs;
+        state->num_pokeballs = state->previous_num_pokeballs;
+        load_pokeball_indicator_graphics(state);
+        state->num_pokeballs = saved;
+    }
 }
 
 /*=============================================================================
@@ -3114,14 +3172,62 @@ static void load_billboard_graphics_blue_field(GameState *state) {
 }
 
 /*=============================================================================
- * ClearAllBlueIndicators
- * Blue field equivalent of ClearAllRedIndicators (Func_1c2cb).
- * Clears bit 7 (blink flag) of each indicator state.
+ * ClearAllBlueIndicators — Func_1c2cb (0x1c2cb)
+ * Blue field equivalent of ClearAllRedIndicators.
+ * Clears bit 7 (blink flag) and reloads BG tilemap tiles for all 5 indicators.
+ * Pass 1 (indicators 0-1): gfx_state = indicator_state & 0x7F
+ * Pass 2 (indicators 2-4): gfx_state = indicator_state + wd648/wd649/wd64a
  *===========================================================================*/
 void clear_all_blue_indicators(GameState *state) {
-    for (uint8_t i = 0; i < 5; i++) {
-        state->indicator_states[i] &= 0x7F;
+    if (!(state->current_stage & 1)) return; /* only bottom stage */
+
+    /* Pass 1: indicators 0-1 */
+    for (uint8_t c = 0; c < 2; c++) {
+        uint8_t gfx = state->indicator_states[c] & 0x7F;
+        load_arrow_indicator_graphics_blue(state, c, gfx);
     }
+
+    /* Pass 2: indicators 2-4, add wd648/wd649/wd64a offset */
+    for (uint8_t c = 2; c < 5; c++) {
+        uint8_t gfx = state->indicator_states[c];
+        uint8_t d = 0;
+        switch (c) {
+        case 2: d = state->wd648; break;
+        case 3: d = state->wd649; break;
+        case 4: d = state->wd64a; break;
+        }
+        gfx += d;
+        load_arrow_indicator_graphics_blue(state, c, gfx);
+    }
+}
+
+/*=============================================================================
+ * StartMapMoveBlueInit — Func_31326 (0x31326)
+ * Blue field-specific initialization when map move mode starts.
+ * Called from start_map_move_mode() for blue field stages.
+ * Handles: Psyduck/Poliwag graphics, collision map modifications,
+ *          and blue indicator BG tile reload.
+ *===========================================================================*/
+void start_map_move_blue_init(GameState *state) {
+    /* Direction-dependent Psyduck/Poliwag graphics (ASM lines 266-283) */
+    if (state->map_move_direction == 0) {
+        load_psyduck_or_poliwag_graphics_blue(state, 3);
+    } else {
+        load_psyduck_or_poliwag_graphics_blue(state, 1);
+        load_psyduck_or_poliwag_graphics_blue(state, 6);
+        load_psyduck_or_poliwag_number_graphics_blue(state, 7);
+    }
+
+    /* Collision map modifications for bottom stage (ASM lines 285-295) */
+    if (state->current_stage & 1) {
+        state->stage_collision_map[0xE3] = 0x54;
+        state->stage_collision_map[0x103] = 0x55;
+        state->stage_collision_map[0xF0] = 0x52;
+        state->stage_collision_map[0x110] = 0x53;
+    }
+
+    /* Reload blue indicator BG tiles (Func_1c2cb) */
+    clear_all_blue_indicators(state);
 }
 
 /*=============================================================================

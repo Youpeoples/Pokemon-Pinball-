@@ -1618,8 +1618,9 @@ static void display_pokedex_scroll_bar_and_cursor(GameState *state) {
     /* Blinking cursor: visible when bit 3 of post-increment counter is CLEAR (0-7),
      * hidden when SET (8-15). */
     if (!(counter & 0x08)) {
-        /* ASM: swap c; add $40 → Y = vis_pos*16 + $40; b=$10 → X = $10 */
-        uint8_t cursor_y = (uint8_t)(vis_pos * 0x10 + 0x40);
+        /* ASM: swap c; add $40 → Y = vis_pos*16 + $40; adjusted to $3C for
+         * correct vertical centering with list entries after STAT split. */
+        uint8_t cursor_y = (uint8_t)(vis_pos * 0x10 + 0x3C);
         load_sprite_data(state, sprite_pokedex_arrow, cursor_y, 0x10);
     }
 
@@ -1645,7 +1646,7 @@ static void handle_pokedex_screen(GameState *state) {
                 load_screen_assets(SCREEN_POKEDEX, state->vram,
                                    state, state->asset_base_path);
                 state->hram.lcdc = 0x23;  /* signed tile addressing, BG+OBJ */
-                state->hram.scy = 0x08;
+                state->hram.scy = 0x09;
                 state->hram.scx = 0x00;
                 state->hram.wy = 0x8C;
                 state->hram.wx = 0x07;
@@ -3955,6 +3956,11 @@ static void handle_field_select_screen(GameState *state) {
                 /* Scan for custom tables */
                 field_select_scan_tables(state);
 
+                /* Reset cursor/offset to defaults before loading previews */
+                fs->cursor_index = 0;
+                fs->visible_offset = 0;
+                state->selected_field_index = 0;
+
                 /* Re-save originals from the freshly-loaded baked tilemap */
                 fs->originals_saved = false;
                 field_select_save_originals(state);
@@ -3965,9 +3971,6 @@ static void handle_field_select_screen(GameState *state) {
                     field_select_load_arrow_tiles(state);
                 }
             }
-            fs->cursor_index = 0;
-            fs->visible_offset = 0;
-            state->selected_field_index = 0;
             state->field_select_blinking_border_frame = 8;
             state->field_select_border_anim_step = 0;
             state->high_scores_arrow_anim_counter = 0;

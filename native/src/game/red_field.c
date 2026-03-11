@@ -478,6 +478,13 @@ void init_red_field(GameState *state) {
      * call SetSongBank
      * ld de, MUSIC_RED_FIELD      ; id $01
      * call PlaySong */
+    /* Initialize bellsprout animation to idle breathing loop.
+     * Without this, Lua resolve_bellsprout() advances from (0,0,0) to index 1
+     * on the first frame, which triggers pinball_is_visible = 0 (ball hidden). */
+    state->bellsprout_anim.frame_counter = 0x19;
+    state->bellsprout_anim.frame = 0;
+    state->bellsprout_anim.index = 6;
+
     PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
 }
 
@@ -542,19 +549,36 @@ void conclude_special_mode_red_field(GameState *state) {
                 load_billboard_tilemap(state);
                 load_map_billboard_tile_data(state);
 
-                /* StageSharedBonusSlotGlowGfx+$60 → vTilesOB tile $20, $E0 bytes.
-                 * Catch mode's billboard/pokemon sprites overwrite slot glow
-                 * tiles at $8200+. Reload them from the PNG. */
+                /* StageSharedBonusSlotGlowGfx → vTilesOB tile $1A, $160 bytes.
+                 * ASM (catchem_mode.asm:1283-1287): full reload of glow tiles.
+                 * Catch mode's animated mon overwrites $81A0-$82FF. */
                 {
                     char glow_path[260];
                     snprintf(glow_path, sizeof(glow_path), "%s/gfx/stage/shared/bonus_slot_glow.png",
                              state->asset_base_path);
                     size_t glow_size = 0;
                     uint8_t *glow_data = tiles_from_png(glow_path, &glow_size);
-                    if (glow_data && glow_size >= 0x60 + 0xE0) {
-                        vram_write(state->vram, 0, 0x8200, glow_data + 0x60, 0xE0);
+                    if (glow_data && glow_size >= 0x0160) {
+                        vram_write(state->vram, 0, 0x81A0, glow_data, 0x0160);
                     }
                     free(glow_data);
+                }
+
+                /* BonusSlotGlow2Gfx → vTilesOB tile $38 ($8380), $20 bytes.
+                 * LoadShakeBallGfx during capture overwrites $8380-$83BF with
+                 * ball shake tiles. Restore the slot glow frame 2 tile data. */
+                {
+                    char path[260];
+                    snprintf(path, sizeof(path), "%s/gfx/stage/shared/bonus_slot_glow_2.png",
+                             state->asset_base_path);
+                    for (char *p = path; *p; p++) { if (*p == '/') *p = '\\'; }
+                    size_t data_size = 0;
+                    uint8_t *tile_data = tiles_from_png(path, &data_size);
+                    if (tile_data) {
+                        uint16_t copy = (data_size < 0x20) ? (uint16_t)data_size : 0x20;
+                        vram_write(state->vram, 0, 0x8380, tile_data, copy);
+                        free(tile_data);
+                    }
                 }
 
                 /* BlankSaverSpaceTileData: restore tiles at $8AE0, $8B00, $8B20
@@ -3030,8 +3054,16 @@ void start_slot_roulette(GameState *state) {
     /* ASM: CheckSpecialModeColision with SLOT_HOLE (13). */
     check_special_mode_collision(state, 13);
     if (state->in_special_mode) {
-        state->pinball_is_visible = 1;
-        state->enable_ball_gravity_and_tilt = 1;
+        if (state->special_mode == 1 && state->special_mode_state >= 3) {
+            /* Evolution completing: ASM blocks via MainLoopUntilTextIsClear
+             * for text/jackpot. In C we handle it async — halt the slot exit
+             * counter and keep ball hidden until state 5 releases it. */
+            state->slot_enter_or_exit_counter = 0;
+        } else {
+            /* Catch'em / map move: restore ball, let counter continue */
+            state->pinball_is_visible = 1;
+            state->enable_ball_gravity_and_tilt = 1;
+        }
         return;
     }
 
@@ -3822,7 +3854,13 @@ static void close_slot_cave(GameState *state) {
     state->slot_is_open = 0;
     state->frames_until_slot_cave_opens = 0;
     state->slot_glowing_anim_counter = 0;
-    load_slot_cave_cover_graphics(state);
+    /* ASM has two separate functions:
+     * CloseSlotCave_ (0x107b0) → LoadSlotCaveCoverGraphics_RedField
+     * CloseSlotCave  (0x1f2ed) → LoadSlotCaveCoverGraphics_BlueField */
+    if (state->current_stage >= STAGE_BLUE_FIELD_TOP)
+        load_slot_cave_cover_graphics_blue(state);
+    else
+        load_slot_cave_cover_graphics(state);
 }
 
 /*=============================================================================
@@ -5993,10 +6031,10 @@ static void handle_red_catchem_collision(GameState *state) {
         PLAY_SFX(state, "catch_attempt", 0x23, 0x29);
         /* ShowJackpotText (0x10825): payout jackpot as stationary text */
         show_jackpot_text(state);
-        /* Func_10848: if first Pokemon caught (party was empty before catch),
-         * award 100,000,000 point bonus (ASM: OneHundredMillionPoints).
-         * State 5 incremented num_party_mons, so check <= 1. */
-        if (state->num_party_mons <= 1) {
+        /* Func_10848 (0x10848): ASM checks wNumPartyMons == 0. Since
+         * AddCaughtPokemonToParty already incremented in state 5, this is
+         * effectively dead code in the catch path (matches ASM behavior). */
+        if (state->num_party_mons == 0) {
             static const uint8_t hundred_million[6] = {
                 0x00, 0x00, 0x00, 0x00, 0x01, 0x00
             };
@@ -6013,10 +6051,9 @@ static void handle_red_catchem_collision(GameState *state) {
          * ASM: MainLoopUntilTextIsClear (0x3475) call #2 at line 802.
          * Pokeball stays on screen until this completes. */
         if (state->bottom_text_enabled) break;
-        /* Func_10848 (0x10848): if first Pokemon caught (party was empty),
-         * show "POKEMON CAUGHT SPECIAL BONUS" + "1,000,000,000" text.
-         * Points already added in state 8. Text display was missing. */
-        if (state->num_party_mons <= 1) {
+        /* Func_10848 text portion: ASM checks wNumPartyMons == 0.
+         * Effectively dead code since party was already incremented. */
+        if (state->num_party_mons == 0) {
             fill_bottom_message_buffer_with_black_tile(state);
             enable_bottom_text(state);
             load_scrolling_text(state, 1, ONE_BILLION_HEADER, "1,000,000,000 ");
@@ -6396,7 +6433,7 @@ void start_evolution_mode(GameState *state) {
         uint8_t evo_type = EVO_EXPERIENCE;
         if (valid_count > 0) {
             /* Pick random slot among valid (non-zero) ones */
-            uint8_t pick = gen_random(state) % valid_count;
+            uint8_t pick = random_range(state, valid_count - 1);
             /* Map pick to nth valid (non-zero) slot */
             int found = 0;
             for (int i = 0; i < 3; i++) {
@@ -6435,7 +6472,7 @@ void start_evolution_mode(GameState *state) {
 
     /* ASM forward shuffle: only within [0..numPossible] range */
     for (int i = 0; i <= (int)num_possible; i++) {
-        uint8_t j = gen_random(state) % (num_possible + 1);
+        uint8_t j = random_range(state, num_possible);
         uint8_t tmp = state->evolution_object_states[i];
         state->evolution_object_states[i] = state->evolution_object_states[j];
         state->evolution_object_states[j] = tmp;
@@ -6529,7 +6566,10 @@ void start_evolution_mode(GameState *state) {
             bg[0x106 + i] = catch_bar_tiles[i];
         }
 
-        clear_all_red_indicators(state);
+        if (state->current_stage >= STAGE_BLUE_FIELD_TOP)
+            clear_all_blue_indicators(state);
+        else
+            clear_all_red_indicators(state);
     }
 }
 
@@ -6569,7 +6609,7 @@ static void try_evo_object_hit(GameState *state, uint8_t obj_idx) {
          * ASM ChooseNextEvolutionTrinketLocation picks 0-16 directly into
          * wActiveEvolutionTrinkets — NO stage offset adjustment. */
         PLAY_SFX(state, "catch_ball_hit", 0x07, 0x46);
-        uint8_t pos = gen_random(state) % 17;
+        uint8_t pos = random_range(state, 17);
         state->active_evolution_trinkets[pos] = state->current_evolution_type;
         state->evolution_objects_disabled = state->current_evolution_type;
 
@@ -6785,6 +6825,18 @@ static void handle_red_evo_mode_collision(GameState *state) {
              try_evo_object_hit(state, 8); return; /* Spinner */
     case 13: /* Slot hole: evolution complete! */
         if (state->num_evolution_trinkets >= 3) {
+            /* ASM: HandleSlotCaveCollision_EvolutionMode_RedField (0x20b02)
+             * loads the EVOLVED mon's billboard picture + palettes before
+             * showing the "IT EVOLVED INTO" text. */
+            {
+                uint8_t evolved = state->current_evolution_mon;
+                if (evolved == 0xFF)
+                    evolved = state->current_catchem_mon;
+                state->current_catchem_mon = evolved;
+                load_mon_billboard_picture(state);
+                load_billboard_tilemap(state);
+                refresh_billboard_illumination(state);
+            }
             state->special_mode_state = 3; /* COMPLETE → show evolved text */
             add_score_no_multiplier(state, state->config->scores.score_10000000);
             PLAY_SFX(state, "catch_success", 0x25, 0x25);
@@ -6854,8 +6906,13 @@ static void handle_red_evo_mode_collision(GameState *state) {
         state->wd559 = 0;
         state->evolution_objects_disabled = 0;
         if (state->current_stage & 1) {
-            clear_all_red_indicators(state);
-            load_slot_cave_cover_graphics(state);
+            if (state->current_stage >= STAGE_BLUE_FIELD_TOP) {
+                clear_all_blue_indicators(state);
+                load_slot_cave_cover_graphics_blue(state);
+            } else {
+                clear_all_red_indicators(state);
+                load_slot_cave_cover_graphics(state);
+            }
         }
         stop_timer(state);
         fill_bottom_message_buffer_with_black_tile(state);
@@ -6887,13 +6944,42 @@ static void handle_red_evo_mode_collision(GameState *state) {
         break;
     case 5: /* Wait for jackpot text, then conclude */
         if (state->bottom_text_enabled) break;
+        /* PlaceEvolutionInParty (0x10ca5): replace party mon with evolved form */
+        if (state->current_evolution_mon != 0xFF &&
+            state->cur_selected_party_mon < state->num_party_mons) {
+            state->party_mons[state->cur_selected_party_mon] =
+                state->current_evolution_mon;
+        }
+        conclude_special_mode_red_field(state);
+        /* Resume field music (red or blue) */
+        if (state->current_stage >= STAGE_BLUE_FIELD_TOP)
+            PLAY_MUSIC(state, "blue_field", 0x0F, 0x02);
+        else
+            PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
         state->num_pokemon_evolved_in_ball_bonus++;
+        /* SetPokemonOwnedFlag (0x1077c): mark evolved mon as caught */
+        {
+            uint8_t mon = (state->current_evolution_mon != 0xFF)
+                ? state->current_evolution_mon : state->current_catchem_mon;
+            if (mon < NUM_POKEMON)
+                state->pokedex_flags[mon] |= 0x02;
+        }
         if (state->num_pokeballs < 3)
             state->num_pokeballs += 2;
         if (state->num_pokeballs > 3)
             state->num_pokeballs = 3;
-        conclude_special_mode_red_field(state);
-        PLAY_MUSIC(state, "red_field", 0x0F, 0x01);
+        /* Release ball from slot.
+         * ASM: after blocking text/jackpot, the slot exit counter naturally
+         * continues and ejects the ball. In C we halted the counter, so
+         * release the ball directly: restore visibility, gravity, eject
+         * velocity, and reload the slot cave cover graphics. */
+        state->pinball_is_visible = 1;
+        state->enable_ball_gravity_and_tilt = 1;
+        state->ball_y_velocity = MAKE_FIXED(2, 0);
+        state->ball_x_velocity = 0x0080;
+        load_ball_gfx(state);
+        load_slot_cave_cover_graphics(state);
+        state->slot_enter_or_exit_counter = 0;
         break;
     case 6: /* Wait for "EVOLUTION FAILED" text, then conclude */
         if (state->bottom_text_enabled) break;
@@ -7099,8 +7185,13 @@ void start_map_move_mode(GameState *state) {
     /* Play hurry-up music */
     PLAY_MUSIC(state, "gastly_graveyard", 0x0F, 0x05);
 
-    if (state->current_stage & 1)
+    /* Stage-specific indicator reload + graphics (ASM: ClearAllRedIndicators
+     * for red, Func_1c2cb + Psyduck/Poliwag gfx for blue) */
+    if (is_blue) {
+        start_map_move_blue_init(state);
+    } else if (state->current_stage & 1) {
         clear_all_red_indicators(state);
+    }
 }
 
 /* HandleMapModeCollision (0x30427 red / 0x31389 blue) — unified handler */
@@ -7195,7 +7286,8 @@ static void handle_map_mode_collision(GameState *state) {
         if (state->current_stage & 1) {
             bool is_blue_mm = (state->current_stage >= STAGE_BLUE_FIELD_TOP);
             if (is_blue_mm) {
-                /* Blue: Func_1c2cb equivalent */
+                /* Blue: Func_1c2cb + slot cave + billboard (map_move.asm:660) */
+                clear_all_blue_indicators(state);
                 load_slot_cave_cover_graphics_blue(state);
                 load_map_billboard_tile_data(state);
             } else {
@@ -7596,7 +7688,7 @@ static void handle_blue_catchem_collision(GameState *state) {
         /* ShowJackpotText (0x10825): payout jackpot as stationary text */
         show_jackpot_text(state);
         /* Func_10848: if first Pokemon caught, award 100M bonus */
-        if (state->num_party_mons <= 1) {
+        if (state->num_party_mons == 0) {
             static const uint8_t hundred_million[6] = {
                 0x00, 0x00, 0x00, 0x00, 0x01, 0x00
             };
@@ -7615,7 +7707,7 @@ static void handle_blue_catchem_collision(GameState *state) {
         /* Func_10848 (0x10848): if first Pokemon caught (party was empty),
          * show "POKEMON CAUGHT SPECIAL BONUS" + "1,000,000,000" text.
          * Points already added in state 8. */
-        if (state->num_party_mons <= 1) {
+        if (state->num_party_mons == 0) {
             fill_bottom_message_buffer_with_black_tile(state);
             enable_bottom_text(state);
             load_scrolling_text(state, 1, ONE_BILLION_HEADER, "1,000,000,000 ");
@@ -7704,7 +7796,7 @@ static void try_blue_evo_object_hit(GameState *state, uint8_t obj_idx) {
     if (was_correct) {
         PLAY_SFX(state, "catch_ball_hit", 0x07, 0x46);
         /* ASM ChooseNextEvolutionTrinketLocation_BlueField: raw 0-16, no offset */
-        uint8_t pos = gen_random(state) % 17;
+        uint8_t pos = random_range(state, 17);
         state->active_evolution_trinkets[pos] = state->current_evolution_type;
         state->evolution_objects_disabled = state->current_evolution_type;
 
@@ -7818,6 +7910,16 @@ static void handle_blue_evo_mode_collision(GameState *state) {
              try_blue_evo_object_hit(state, 8); return; /* Spinner */
     case 13: /* Slot hole: evolution complete! */
         if (state->num_evolution_trinkets >= 3) {
+            /* Load evolved mon's billboard picture (same as red field) */
+            {
+                uint8_t evolved = state->current_evolution_mon;
+                if (evolved == 0xFF)
+                    evolved = state->current_catchem_mon;
+                state->current_catchem_mon = evolved;
+                load_mon_billboard_picture(state);
+                load_billboard_tilemap(state);
+                refresh_billboard_illumination(state);
+            }
             state->special_mode_state = 3; /* COMPLETE → show evolved text */
             add_score_no_multiplier(state, state->config->scores.score_10000000);
             PLAY_SFX(state, "catch_success", 0x25, 0x25);
@@ -7904,13 +8006,26 @@ static void handle_blue_evo_mode_collision(GameState *state) {
         break;
     case 5: /* Wait for jackpot text, then conclude */
         if (state->bottom_text_enabled) break;
+        /* PlaceEvolutionInParty (0x10ca5): replace party mon with evolved form */
+        if (state->current_evolution_mon != 0xFF &&
+            state->cur_selected_party_mon < state->num_party_mons) {
+            state->party_mons[state->cur_selected_party_mon] =
+                state->current_evolution_mon;
+        }
+        conclude_special_mode_blue_field(state);
+        PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
         state->num_pokemon_evolved_in_ball_bonus++;
+        /* SetPokemonOwnedFlag (0x1077c): mark evolved mon as caught */
+        {
+            uint8_t mon = (state->current_evolution_mon != 0xFF)
+                ? state->current_evolution_mon : state->current_catchem_mon;
+            if (mon < NUM_POKEMON)
+                state->pokedex_flags[mon] |= 0x02;
+        }
         if (state->num_pokeballs < 3)
             state->num_pokeballs += 2;
         if (state->num_pokeballs > 3)
             state->num_pokeballs = 3;
-        conclude_special_mode_blue_field(state);
-        PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
         break;
     case 6: /* Wait for "EVOLUTION FAILED" text, then conclude */
         if (state->bottom_text_enabled) break;
@@ -8694,8 +8809,17 @@ void load_evolution_trinket_graphics(GameState *state) {
         return;
     }
 
-    /* Top stage: vTilesSH tile $10 = $8900. Bottom: vTilesOB tile $20 = $8200 */
-    uint16_t dest = (state->current_stage & 1) ? 0x8200 : 0x8900;
+    /* Bottom (both fields): vTilesOB tile $20 = $8200.
+     * Red top: vTilesSH tile $10 = $8900.
+     * Blue top: vTilesOB tile $60 = $8600. */
+    uint16_t dest;
+    if (state->current_stage & 1) {
+        dest = 0x8200; /* Bottom stage */
+    } else if (state->current_stage >= STAGE_BLUE_FIELD_TOP) {
+        dest = 0x8600; /* Blue field top: vTilesOB tile $60 */
+    } else {
+        dest = 0x8900; /* Red field top: vTilesSH tile $10 */
+    }
     vram_write(state->vram, 0, dest, tile_data, 0xE0);
     free(tile_data);
 

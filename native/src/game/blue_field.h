@@ -38,9 +38,15 @@ void load_blue_field_bottom_graphics(GameState *state);
 
 /*
  * Clear all blue field indicators (Func_1c2cb).
- * Clears bit 7 (blink flag) of each indicator state.
+ * Clears blink flags and reloads BG tilemap tiles for all 5 indicators.
  */
 void clear_all_blue_indicators(GameState *state);
+
+/*
+ * Blue field-specific map move mode initialization (Func_31326).
+ * Loads Psyduck/Poliwag graphics, modifies collision map, reloads indicators.
+ */
+void start_map_move_blue_init(GameState *state);
 
 /*
  * End any active special mode and restore collision state.

@@ -57,18 +57,25 @@ local GHOST_CONFIG = {
 }
 
 --============================================================
--- HOOKS (Not active - C fallback used)
+-- STAGE INITIALIZATION
+-- NOTE: The C init_gengar_bonus() always runs first and sets up ALL
+-- required state (ghost entities, gate, counters, animations, etc.).
+-- This Lua hook runs AFTER as an override layer — only set values
+-- you want to customize.
 --============================================================
---[[
 function on_stage_init(stage_id)
-    pinball.set_state("gengar_bonus_closed_gate", 0)
-    pinball.set_state("num_gastly_hits", 0)
-    pinball.set_state("num_haunter_hits", 0)
-    pinball.set_state("num_gengar_hits", 0)
-    pinball.set_state("gengar_defeated", 0)
+    -- C init always runs first, this runs as override
+    -- Example overrides (uncomment to customize):
+    -- pinball.set_state("gengar_bonus_closed_gate", 1)
+    -- pinball.set_state("num_gastly_hits", 0)
+
     pinball.log("Gengar bonus stage initialized")
 end
 
+--============================================================
+-- HOOKS (Not active - C fallback used)
+--============================================================
+--[[
 function on_bonus_frame()
     -- Called every frame during bonus stage
     -- Update ghost positions, check collisions, animate

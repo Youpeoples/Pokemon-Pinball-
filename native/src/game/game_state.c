@@ -7,6 +7,7 @@
 
 #include "game/game_state.h"
 #include "game/config_data.h"
+#include "game/rng.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -92,8 +93,9 @@ void game_state_reset(GameState *state) {
     state->bg_palettes[0].colors[2] = 0x294A; /* Dark gray */
     state->bg_palettes[0].colors[3] = 0x0000; /* Black */
 
-    /* Initialize RNG modulus */
-    state->rng_modulus = 251; /* Prime number modulus for PRNG */
+    /* Initialize RNG — ASM sets wRNGModulus = $FF then calls ResetRNG */
+    state->rng_modulus = 0xFF;
+    reset_rng(state, state->rng_sram_seed);
 
     /* Bonus multiplier starts at 1x */
     state->cur_bonus_multiplier = 1;

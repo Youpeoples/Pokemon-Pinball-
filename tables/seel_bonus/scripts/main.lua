@@ -50,18 +50,25 @@ local SEEL_CONFIG = {
 }
 
 --============================================================
--- HOOKS (Not active - C fallback used)
+-- STAGE INITIALIZATION
+-- NOTE: The C init_seel_bonus() always runs first and sets up ALL
+-- required state (3 seel entities, streak counter, gate, etc.).
+-- This Lua hook runs AFTER as an override layer — only set values
+-- you want to customize.
 --============================================================
---[[
 function on_stage_init(stage_id)
-    pinball.set_state("seel_bonus_closed_gate", 0)
-    pinball.set_state("seel_stage_streak", 0)
-    pinball.set_state("seel_stage_score", 0)
-    pinball.set_state("seel_stage_state", 0)
-    pinball.set_state("seel_completion_state", 0)
+    -- C init always runs first, this runs as override
+    -- Example overrides (uncomment to customize):
+    -- pinball.set_state("seel_stage_streak", 0)
+    -- pinball.set_state("seel_completion_state", 0)
+
     pinball.log("Seel bonus stage initialized")
 end
 
+--============================================================
+-- HOOKS (Not active - C fallback used)
+--============================================================
+--[[
 function on_bonus_frame()
     -- Update seel positions, AI states, check collisions
 end

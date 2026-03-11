@@ -44,16 +44,25 @@ local MEOWTH_CONFIG = {
 }
 
 --============================================================
--- HOOKS (Not active - C fallback used)
+-- STAGE INITIALIZATION
+-- NOTE: The C init_meowth_bonus() always runs first and sets up ALL
+-- required state (jewel slots, Meowth AI, score counters, etc.).
+-- This Lua hook runs AFTER as an override layer — only set values
+-- you want to customize.
 --============================================================
---[[
 function on_stage_init(stage_id)
-    pinball.set_state("meowth_bonus_closed_gate", 0)
-    pinball.set_state("meowth_stage_score", 0)
-    pinball.set_state("meowth_state", 0)
+    -- C init always runs first, this runs as override
+    -- Example overrides (uncomment to customize):
+    -- pinball.set_state("meowth_stage_score", 0)
+    -- pinball.set_state("meowth_state", 0)
+
     pinball.log("Meowth bonus stage initialized")
 end
 
+--============================================================
+-- HOOKS (Not active - C fallback used)
+--============================================================
+--[[
 function on_bonus_frame()
     -- Update Meowth movement, jewel physics, check collisions
 end

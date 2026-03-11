@@ -215,8 +215,8 @@ static void draw_evolution_trinket_blue(GameState *state) {
     uint8_t bob = (state->hram.frame_counter & 0x0E) == 0 ? 1 : 0;
 
     if (state->current_stage == STAGE_BLUE_FIELD_TOP) {
-        /* ASM uses SPRITE_TRINKET_BLUE_TOP (c = base - 1, a = [de] + c) */
-        const uint8_t *const *trinket_sprites = evo_trinket_top_sprites;
+        /* ASM uses SPRITE_TRINKET_BLUE_TOP (tiles $60-$6c, not $90-$9c) */
+        const uint8_t *const *trinket_sprites = evo_trinket_blue_top_sprites;
         for (int i = 0; i < 12; i++) {
             uint8_t type = state->active_evolution_trinkets[i];
             if (type == 0 || type > 7) continue;

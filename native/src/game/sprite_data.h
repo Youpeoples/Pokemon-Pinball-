@@ -1417,6 +1417,22 @@ static const uint8_t *const evo_trinket_top_sprites[8] = {
     sprite_trinket_top_7,
 };
 
+/* Blue field top trinkets (tiles $60-$6c, ASM 0x4626-0x4648) */
+static const uint8_t sprite_trinket_blue_top_1[] = { 0x10, 0x08, 0x60, 0x06, 0x80 };
+static const uint8_t sprite_trinket_blue_top_2[] = { 0x10, 0x08, 0x62, 0x06, 0x80 };
+static const uint8_t sprite_trinket_blue_top_3[] = { 0x10, 0x08, 0x64, 0x06, 0x80 };
+static const uint8_t sprite_trinket_blue_top_4[] = { 0x10, 0x08, 0x66, 0x17, 0x80 };
+static const uint8_t sprite_trinket_blue_top_5[] = { 0x10, 0x08, 0x68, 0x17, 0x80 };
+static const uint8_t sprite_trinket_blue_top_6[] = { 0x10, 0x08, 0x6a, 0x06, 0x80 };
+static const uint8_t sprite_trinket_blue_top_7[] = { 0x10, 0x08, 0x6c, 0x06, 0x80 };
+
+static const uint8_t *const evo_trinket_blue_top_sprites[8] = {
+    NULL,                      /* type 0 = empty */
+    sprite_trinket_blue_top_1, sprite_trinket_blue_top_2, sprite_trinket_blue_top_3,
+    sprite_trinket_blue_top_4, sprite_trinket_blue_top_5, sprite_trinket_blue_top_6,
+    sprite_trinket_blue_top_7,
+};
+
 /* Bottom field trinkets (tiles $20-$2c) */
 static const uint8_t sprite_trinket_bot_1[] = { 0x10, 0x08, 0x20, 0x06, 0x80 };
 static const uint8_t sprite_trinket_bot_2[] = { 0x10, 0x08, 0x22, 0x06, 0x80 };

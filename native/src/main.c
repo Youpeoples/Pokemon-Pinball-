@@ -209,14 +209,6 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        /* FPS measurement (update once per second) */
-        fps_frame_count++;
-        if (current_time - fps_timer >= 1000.0) {
-            state->debug_fps = (float)(fps_frame_count * 1000.0 / (current_time - fps_timer));
-            fps_frame_count = 0;
-            fps_timer = current_time;
-        }
-
         /* Fixed timestep game update */
         while (accumulator >= FRAME_TIME_MS) {
             /* Read joypad (equivalent to ReadJoypad in home/joypad.asm) */
@@ -241,7 +233,17 @@ int main(int argc, char *argv[]) {
             /* Update audio engine (synthesize one frame of audio) */
             audio_update(audio);
 
+            /* Count game logic frames for FPS display (not render frames) */
+            fps_frame_count++;
+
             accumulator -= FRAME_TIME_MS;
+        }
+
+        /* FPS measurement (update once per second) */
+        if (current_time - fps_timer >= 1000.0) {
+            state->debug_fps = (float)(fps_frame_count * 1000.0 / (current_time - fps_timer));
+            fps_frame_count = 0;
+            fps_timer = current_time;
         }
 
         /* Render current frame */

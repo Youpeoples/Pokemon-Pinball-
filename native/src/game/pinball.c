@@ -812,12 +812,13 @@ static void pinball_load_gfx(GameState *state) {
         fflush(stdout);
     }
 
-    /* Stage-specific initialization: Lua hook or C fallback */
+    /* Stage-specific initialization: C init always runs first to set up all
+     * required state. Lua on_stage_init runs AFTER as an override layer,
+     * allowing scripts to customize specific values without replicating
+     * the full C initialization (40+ variables, collision tables, music, etc.). */
     printf("[LOAD_GFX] Stage init dispatch for 0x%02X...\n", state->current_stage);
     fflush(stdout);
-    if (state->script_engine && state->script_engine->has_on_stage_init) {
-        script_call_on_stage_init(state->script_engine, state->current_stage);
-    } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
+    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
         init_red_field(state);
     } else if (state->current_stage <= STAGE_BLUE_FIELD_BOTTOM) {
         init_blue_field(state);
@@ -836,6 +837,11 @@ static void pinball_load_gfx(GameState *state) {
     }
     else if (state->current_stage == STAGE_SEEL_BONUS) {
         init_seel_bonus(state);
+    }
+
+    /* Lua on_stage_init runs AFTER C init as an override layer */
+    if (state->script_engine && state->script_engine->has_on_stage_init) {
+        script_call_on_stage_init(state->script_engine, state->current_stage);
     }
 
 skip_stage_init:
@@ -909,10 +915,8 @@ static void pinball_start_ball(GameState *state) {
         goto skip_ball_init;
     }
 
-    /* Stage-specific ball init: Lua hook or C fallback */
-    if (state->script_engine && state->script_engine->has_on_ball_init) {
-        script_call_on_ball_init(state->script_engine, state->current_stage);
-    } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
+    /* Stage-specific ball init: C init always runs first, Lua overrides after */
+    if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
         if (state->returning_from_bonus_stage) {
             /* StartBallAfterBonusStageRedField (ASM line 72-95):
              * Position at top of field, clear flags, restore ball type, restart music.
@@ -952,6 +956,11 @@ static void pinball_start_ball(GameState *state) {
         init_ball_diglett_bonus(state);
     } else if (state->current_stage == STAGE_SEEL_BONUS) {
         init_ball_seel_bonus(state);
+    }
+
+    /* Lua on_ball_init runs AFTER C init as an override layer */
+    if (state->script_engine && state->script_engine->has_on_ball_init) {
+        script_call_on_ball_init(state->script_engine, state->current_stage);
     }
 
 skip_ball_init:

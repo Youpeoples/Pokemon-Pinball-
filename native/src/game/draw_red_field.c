@@ -556,6 +556,7 @@ void draw_red_field_sprites(GameState *state) {
         draw_flipper_sprites(state);                     /*  5 */
         draw_pinball(state);                              /*  6 */
         draw_evolution_indicator_arrows(state);           /*  7 */
+
         draw_evolution_trinket(state);                    /*  8 */
         draw_slot_glow(state);                            /*  9 */
     }

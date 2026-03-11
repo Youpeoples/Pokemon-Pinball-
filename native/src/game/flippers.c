@@ -201,6 +201,15 @@ static int read_flipper_collision_attributes(
 /*
  * CheckFlipperCollision (0xe1f0):
  * Determines if ball collides with left or right flipper.
+ *
+ * Includes a lookahead for high-speed balls: if no collision at the current
+ * position and the ball has significant downward velocity, checks up to
+ * (velocity >> 8) pixels ahead along the Y axis. This prevents tunneling
+ * through the thin flipper surface at high speed.
+ *
+ * The lookahead uses the ball's current X (pre-move), so balls in the center
+ * gap between flippers correctly see radii=0 at all Y positions — no false
+ * positives on drain trajectories.
  */
 static void check_flipper_collision(GameState *state) {
     uint8_t ball_x_hi = (uint8_t)(state->ball_x_pos >> 8);
@@ -226,6 +235,37 @@ static void check_flipper_collision(GameState *state) {
                 state->previous_right_flipper_state,
                 (uint8_t)(state->right_flipper_state >> 8))) {
             state->hram.flipper_state_change = state->right_flipper_state_change;
+        }
+    }
+
+    /* Lookahead: if no collision found and ball is falling fast, check future
+     * Y positions to prevent tunneling through the flipper surface. */
+    if (!state->flipper_collision && state->ball_y_velocity > 0x0200) {
+        uint8_t steps = (uint8_t)(state->ball_y_velocity >> 8);
+        if (steps > 7) steps = 7;
+
+        for (uint8_t i = 1; i <= steps; i++) {
+            uint8_t look_y = ball_y_hi + i;
+
+            if (ball_x_hi < 80) {
+                if (read_flipper_collision_attributes(
+                        state, ball_x_hi, look_y,
+                        state->previous_left_flipper_state,
+                        (uint8_t)(state->left_flipper_state >> 8))) {
+                    state->hram.flipper_state_change = state->left_flipper_state_change;
+                    break;
+                }
+            } else {
+                uint16_t mirror = (uint16_t)(0xA000 - state->ball_x_pos);
+                uint8_t mirror_x = (uint8_t)(mirror >> 8);
+                if (read_flipper_collision_attributes(
+                        state, mirror_x, look_y,
+                        state->previous_right_flipper_state,
+                        (uint8_t)(state->right_flipper_state >> 8))) {
+                    state->hram.flipper_state_change = state->right_flipper_state_change;
+                    break;
+                }
+            }
         }
     }
 }

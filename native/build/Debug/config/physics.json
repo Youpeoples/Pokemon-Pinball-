@@ -1,17 +1,17 @@
 {
-    "_comment": "Physics configuration for Pokemon Pinball+. All hex values are strings prefixed with 0x.",
+    "_comment": "Physics configuration for Pokemon Pinball+. Values are in real units (pixels, pixels/frame). Converted to fixed-point 8.8 internally.",
 
-    "gravity": "0x000B",
-    "_comment_gravity": "Fixed-point 8.8: added to Y velocity each frame. 0x000B = 0.043 pixels/frame^2",
+    "gravity": 0.043,
+    "_comment_gravity": "Pixels/frame^2 added to Y velocity each frame. Original: 0.043 (11/256)",
 
     "max_velocity_hi": 7,
-    "_comment_max_velocity_hi": "Maximum velocity high byte. Velocity clamped to +/-7 in high byte (7.xx pixels/frame)",
+    "_comment_max_velocity_hi": "Maximum velocity in whole pixels/frame. Velocity clamped to +/-7",
 
-    "position_clamp_positive": "0x04FF",
-    "_comment_position_clamp_positive": "When velocity hi >= 5, clamp to this value before applying to position",
+    "position_clamp_positive": 4.996,
+    "_comment_position_clamp_positive": "Max position delta per frame (positive direction, ~5 pixels)",
 
-    "position_clamp_negative": "0xFB01",
-    "_comment_position_clamp_negative": "When velocity hi <= -4, clamp to this value before applying to position",
+    "position_clamp_negative": -4.996,
+    "_comment_position_clamp_negative": "Max position delta per frame (negative direction, ~-5 pixels)",
 
     "stage_transition_up_y": 8,
     "_comment_stage_transition_up_y": "Ball Y pixel position threshold to scroll up to top half",
@@ -19,22 +19,22 @@
     "stage_transition_down_y": 168,
     "_comment_stage_transition_down_y": "Ball Y pixel position threshold to scroll down to bottom half",
 
-    "stage_transition_y_offset": "0x8800",
-    "_comment_stage_transition_y_offset": "Fixed-point 8.8 Y offset applied during stage transition (136 pixels)",
+    "stage_transition_y_offset": 136.0,
+    "_comment_stage_transition_y_offset": "Pixel Y offset applied during stage transition (136 pixels)",
 
-    "flipper_delta": "0x0333",
-    "_comment_flipper_delta": "Flipper angular state change per frame (0x0333 = ~1.2 units/frame out of 0x0F00 max)",
+    "flipper_delta": 3.2,
+    "_comment_flipper_delta": "Flipper angular speed per frame (out of 15.0 max)",
 
-    "flipper_max": "0x0F00",
-    "_comment_flipper_max": "Maximum flipper angular position (15 in high byte = 16 positions 0x00-0x0F)",
+    "flipper_max": 15.0,
+    "_comment_flipper_max": "Maximum flipper angular position (16 positions: 0-15)",
 
     "flipper_radius_magnitudes": [
-        "0x0000", "0x000C", "0x001C", "0x0030", "0x0038", "0x0048", "0x005C", "0x006C",
-        "0x0070", "0x0080", "0x0094", "0x00A4", "0x00B4", "0x00C4", "0x00D4", "0x00E4",
-        "0x00F8", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC",
-        "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC", "0x00FC"
+        0, 12, 28, 48, 56, 72, 92, 108,
+        112, 128, 148, 164, 180, 196, 212, 228,
+        248, 252, 252, 252, 252, 252, 252, 252,
+        252, 252, 252, 252, 252, 252, 252, 252
     ],
-    "_comment_flipper_radius_magnitudes": "32 force magnitude values indexed by flipper collision radius. Higher = more force.",
+    "_comment_flipper_radius_magnitudes": "32 force magnitude values indexed by flipper collision radius (0-255). Higher = more force.",
 
     "flipper_collision_x_min": 43,
     "_comment_flipper_collision_x_min": "Minimum ball X position for flipper collision detection",

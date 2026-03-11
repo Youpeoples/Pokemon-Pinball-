@@ -91,6 +91,34 @@ static int parse_hex_or_int(const cJSON *item) {
 }
 
 /*=============================================================================
+ * Helper: Parse a JSON value as fixed-point 8.8
+ *
+ * Accepts three formats:
+ *   - Float/decimal:  0.043  → multiplied by 256 to get raw fixed-point
+ *   - Integer:        11     → multiplied by 256 (treated as whole pixels)
+ *   - Hex string:     "0x000B" → used as raw fixed-point (backward compat)
+ *===========================================================================*/
+static int16_t parse_fixed8_8(const cJSON *item) {
+    if (!item) return 0;
+
+    /* Hex strings pass through as raw fixed-point values */
+    if (cJSON_IsString(item)) {
+        return (int16_t)parse_hex_or_int(item);
+    }
+
+    if (cJSON_IsNumber(item)) {
+        double val = item->valuedouble;
+        /* If the value has a fractional part, treat it as a real number
+         * and convert to 8.8 fixed-point (multiply by 256).
+         * If it's a whole number, also multiply by 256 since the JSON
+         * should express values in real units (pixels, pixels/frame, etc.) */
+        return (int16_t)(int)(val * 256.0 + (val >= 0 ? 0.5 : -0.5));
+    }
+
+    return 0;
+}
+
+/*=============================================================================
  * Helper: Parse a JSON integer and convert to 4-byte BCD, with default
  *===========================================================================*/
 static void parse_bcd_score(const cJSON *obj, const char *key,
@@ -247,17 +275,18 @@ void config_load_physics(ConfigData *config, const char *base_path) {
     cJSON *item;
     int fields = 0;
 
+    /* Fixed-point 8.8 values — accept decimal (e.g. 0.043) or hex ("0x000B") */
     item = cJSON_GetObjectItem(root, "gravity");
-    if (item) { p->gravity = (int16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->gravity = parse_fixed8_8(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "max_velocity_hi");
     if (item) { p->max_velocity_hi = (int8_t)parse_hex_or_int(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "position_clamp_positive");
-    if (item) { p->position_clamp_positive = (int16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->position_clamp_positive = parse_fixed8_8(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "position_clamp_negative");
-    if (item) { p->position_clamp_negative = (int16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->position_clamp_negative = parse_fixed8_8(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "stage_transition_up_y");
     if (item) { p->stage_transition_up_y = (uint8_t)parse_hex_or_int(item); fields++; }
@@ -266,15 +295,15 @@ void config_load_physics(ConfigData *config, const char *base_path) {
     if (item) { p->stage_transition_down_y = (uint8_t)parse_hex_or_int(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "stage_transition_y_offset");
-    if (item) { p->stage_transition_y_offset = (uint16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->stage_transition_y_offset = (uint16_t)parse_fixed8_8(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "flipper_delta");
-    if (item) { p->flipper_delta = (uint16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->flipper_delta = (uint16_t)parse_fixed8_8(item); fields++; }
 
     item = cJSON_GetObjectItem(root, "flipper_max");
-    if (item) { p->flipper_max = (uint16_t)parse_hex_or_int(item); fields++; }
+    if (item) { p->flipper_max = (uint16_t)parse_fixed8_8(item); fields++; }
 
-    /* Flipper radius magnitudes array */
+    /* Flipper radius magnitudes — raw integer force values (not 8.8) */
     item = cJSON_GetObjectItem(root, "flipper_radius_magnitudes");
     if (item && cJSON_IsArray(item)) {
         int count = cJSON_GetArraySize(item);
