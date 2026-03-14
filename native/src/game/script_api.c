@@ -701,6 +701,20 @@ static int api_stop_music(lua_State *L) {
     return 0;
 }
 
+static int api_play_table_music(lua_State *L) {
+    GameState *s = script_get_game_state(L);
+    ScriptEngine *engine = script_get_engine(L);
+    const char *key = luaL_checkstring(L, 1);
+    for (int i = 0; i < engine->num_table_music; i++) {
+        if (strcmp(engine->table_music[i].key, key) == 0) {
+            audio_play_custom_music(s->audio, engine->table_music[i].clip_index);
+            return 0;
+        }
+    }
+    /* Key not found — do nothing. C code already started default music. */
+    return 0;
+}
+
 /*=============================================================================
  * Score
  *===========================================================================*/
@@ -2051,6 +2065,7 @@ static const luaL_Reg pinball_funcs[] = {
     {"play_cry",              api_play_cry},
     {"play_pcm",              api_play_pcm},
     {"stop_music",            api_stop_music},
+    {"play_table_music",      api_play_table_music},
 
     /* Score */
     {"add_score",             api_add_score},

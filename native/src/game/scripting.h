@@ -31,6 +31,14 @@ typedef struct ScriptEngine {
     char table_path[260];      /* Path to currently loaded table folder */
     bool table_loaded;         /* True if a table's scripts are active */
 
+    /* Per-table custom music clips (loaded from manifest "music" section) */
+#define TABLE_MUSIC_MAX 8
+    struct {
+        char key[32];       /* "stage", "catch", "evolution", etc. */
+        int clip_index;     /* Index into AudioEngine.custom_clips[] */
+    } table_music[TABLE_MUSIC_MAX];
+    int num_table_music;
+
     /* Hook availability flags (cached after script load) */
     bool has_on_stage_init;
     bool has_on_ball_init;

@@ -1,7 +1,7 @@
 {
     "name": "Gold Field",
     "type": "main_field",
-    "description": "Stub custom table for UI testing",
+    "description": "A gold-tinted custom table with increased ball speed",
     "preview": "preview.png",
     "preview_palette": [[31,31,31], [31,25,0], [20,10,0], [0,0,0]],
     "stages": {
@@ -14,7 +14,17 @@
             "has_flippers": true
         }
     },
+    "music": {
+        "stage": "audio/custom/DOOM.wav"
+    },
     "scripts": {
-        "main": "scripts/main.lua"
+        "main": "scripts/main.lua",
+        "collision": "scripts/collision.lua",
+        "sprites": "scripts/sprites.lua",
+        "slot": "scripts/slot.lua",
+        "catchem": "scripts/catchem.lua",
+        "evolution": "scripts/evolution.lua",
+        "map_move": "scripts/map_move.lua",
+        "billboard": "scripts/billboard.lua"
     }
 }

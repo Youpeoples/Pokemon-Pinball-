@@ -4056,6 +4056,18 @@ static void handle_field_select_screen(GameState *state) {
                     table_idx = 0;
                 state->current_stage =
                     fs->tables[table_idx].starting_stage;
+
+                /* Set active_table_folder for script engine override */
+                if (fs->tables[table_idx].is_builtin) {
+                    state->active_table_folder[0] = '\0';
+                } else {
+                    strncpy(state->active_table_folder,
+                            fs->tables[table_idx].folder,
+                            sizeof(state->active_table_folder) - 1);
+                    state->active_table_folder[
+                        sizeof(state->active_table_folder) - 1] = '\0';
+                }
+
                 state->saved_game = 0;
                 save_game(state);
                 state->loading_saved_game = 0;

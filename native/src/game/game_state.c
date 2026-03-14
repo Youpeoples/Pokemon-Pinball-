@@ -33,6 +33,8 @@ void game_state_reset(GameState *state) {
     uint8_t saved_debug_mode = state->debug_mode;
     char saved_asset_base_path[260];
     memcpy(saved_asset_base_path, state->asset_base_path, sizeof(saved_asset_base_path));
+    char saved_active_table_folder[64];
+    memcpy(saved_active_table_folder, state->active_table_folder, sizeof(saved_active_table_folder));
 
     /* Clear all state to zero (equivalent to ClearData on WRAM + HRAM) */
     memset(state, 0, sizeof(GameState));
@@ -46,6 +48,7 @@ void game_state_reset(GameState *state) {
     state->slot_force_field_data = saved_slot_force_field_data;
     state->debug_mode = saved_debug_mode;
     memcpy(state->asset_base_path, saved_asset_base_path, sizeof(state->asset_base_path));
+    memcpy(state->active_table_folder, saved_active_table_folder, sizeof(state->active_table_folder));
 
     /* Set GBC flag - we're always running in GBC mode */
     state->hram.gbc_flag = 1;

@@ -12,6 +12,7 @@
 #include "game/game_state.h"
 #include "game/billboard.h"
 #include "game/collision.h"
+#include "audio/audio.h"
 
 #include <lua.h>
 #include <lualib.h>
@@ -245,6 +246,36 @@ bool script_load_table(ScriptEngine *engine, const char *table_path) {
         }
     }
 
+    /* Load music referenced in manifest */
+    cJSON *music = cJSON_GetObjectItem(manifest, "music");
+    if (music) {
+        cJSON *entry = NULL;
+        cJSON_ArrayForEach(entry, music) {
+            if (cJSON_IsString(entry) && engine->num_table_music < TABLE_MUSIC_MAX) {
+                /* Try table-relative path first, then asset-base-relative */
+                char music_path[520];
+                snprintf(music_path, sizeof(music_path), "%s/%s",
+                         table_path, entry->valuestring);
+                int idx = audio_load_custom_clip(engine->game_state->audio, music_path);
+                if (idx < 0) {
+                    /* Fallback: asset-base-relative */
+                    snprintf(music_path, sizeof(music_path), "%s%s",
+                             engine->game_state->asset_base_path, entry->valuestring);
+                    idx = audio_load_custom_clip(engine->game_state->audio, music_path);
+                }
+                if (idx >= 0) {
+                    strncpy(engine->table_music[engine->num_table_music].key,
+                            entry->string, 31);
+                    engine->table_music[engine->num_table_music].key[31] = '\0';
+                    engine->table_music[engine->num_table_music].clip_index = idx;
+                    engine->num_table_music++;
+                    printf("[Script] Table music '%s' loaded as clip %d\n",
+                           entry->string, idx);
+                }
+            }
+        }
+    }
+
     cJSON_Delete(manifest);
 
     /* Update hook availability flags */
@@ -278,6 +309,9 @@ void script_unload_table(ScriptEngine *engine) {
     engine->table_loaded = false;
     memset(engine->table_path, 0, sizeof(engine->table_path));
 
+    /* Clear table music */
+    engine->num_table_music = 0;
+
     /* Clear all hook flags */
     engine->has_on_stage_init = false;
     engine->has_on_ball_init = false;
@@ -296,6 +330,23 @@ void script_unload_table(ScriptEngine *engine) {
 
 bool script_load_table_for_stage(ScriptEngine *engine, uint8_t stage_id) {
     if (!engine || !engine->initialized) return false;
+
+    /* If active_table_folder is set, use it for main field stages */
+    if (engine->game_state->active_table_folder[0] != '\0') {
+        if (stage_id == 0x0 || stage_id == 0x1 ||
+            stage_id == 0x4 || stage_id == 0x5) {
+            char table_path[520];
+            snprintf(table_path, sizeof(table_path), "%stables/%s",
+                     engine->game_state->asset_base_path,
+                     engine->game_state->active_table_folder);
+
+            if (engine->table_loaded && strcmp(engine->table_path, table_path) == 0)
+                return true;
+
+            script_unload_table(engine);
+            return script_load_table(engine, table_path);
+        }
+    }
 
     /* Map stage IDs to table folder names */
     const char *table_name = NULL;

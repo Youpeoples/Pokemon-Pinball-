@@ -878,6 +878,7 @@ typedef struct GameState {
 
     /* --- Lua scripting engine (not in original GBC) --- */
     ScriptEngine *script_engine;    /* Lua scripting engine for moddable table logic */
+    char active_table_folder[64];   /* Custom table folder override for scripting */
 
     /* --- Debug overlay (not in original GBC) --- */
     uint8_t debug_mode;             /* F1 toggles: 0=off, 1=text overlay */
