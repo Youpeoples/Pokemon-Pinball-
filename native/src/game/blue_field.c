@@ -26,6 +26,7 @@
 #include "game/timer.h"
 
 #include "../renderer/tile_loader.h"  /* load_binary_file */
+#include "../data/embedded_data.h"
 
 #include "game/config_data.h"
 
@@ -44,10 +45,8 @@ static size_t force_field_data_size = 0;
 
 static void ensure_force_field_data_loaded(GameState *state) {
     if (!force_field_data) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/ball_physics_ec000.bin",
-                 state->asset_base_path);
-        force_field_data = load_binary_file(path, &force_field_data_size);
+        force_field_data = load_binary_data(state->asset_base_path,
+            "data/collision/ball_physics_ec000.bin", &force_field_data_size);
     }
 }
 
@@ -2653,11 +2652,8 @@ static void apply_slot_force_field_impl(GameState *state, uint8_t ref_y) {
 
     /* Load slot force field data lazily (shared with red field) */
     if (!state->slot_force_field_data) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/ball_physics_f0000.bin",
-                 state->asset_base_path);
-        state->slot_force_field_data = load_binary_file(path,
-                                                         &state->slot_force_field_data_size);
+        state->slot_force_field_data = load_binary_data(state->asset_base_path,
+            "data/collision/ball_physics_f0000.bin", &state->slot_force_field_data_size);
         if (!state->slot_force_field_data) return;
     }
 

@@ -13,7 +13,7 @@
 #include "game/config_data.h"
 #include "game/joypad.h"
 #include "audio/audio.h"
-#include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,22 +27,20 @@ static uint8_t *flipper_normals[2] = { NULL, NULL };     /* Bank 0, Bank 1 */
 static size_t flipper_normals_size[2] = { 0, 0 };
 
 void load_flipper_collision_data(GameState *state) {
-    char path[260];
+    char rel_path[128];
     for (int i = 0; i < 2; i++) {
-        snprintf(path, sizeof(path), "%s/data/collision/flippers/radii_%d",
-                 state->asset_base_path, i);
+        snprintf(rel_path, sizeof(rel_path), "data/collision/flippers/radii_%d", i);
         free(flipper_radii[i]);
-        flipper_radii[i] = load_binary_file(path, &flipper_radii_size[i]);
+        flipper_radii[i] = load_binary_data(state->asset_base_path, rel_path, &flipper_radii_size[i]);
         if (!flipper_radii[i]) {
-            fprintf(stderr, "flippers: failed to load '%s'\n", path);
+            fprintf(stderr, "flippers: failed to load '%s'\n", rel_path);
         }
 
-        snprintf(path, sizeof(path), "%s/data/collision/flippers/normal_angles_%d",
-                 state->asset_base_path, i);
+        snprintf(rel_path, sizeof(rel_path), "data/collision/flippers/normal_angles_%d", i);
         free(flipper_normals[i]);
-        flipper_normals[i] = load_binary_file(path, &flipper_normals_size[i]);
+        flipper_normals[i] = load_binary_data(state->asset_base_path, rel_path, &flipper_normals_size[i]);
         if (!flipper_normals[i]) {
-            fprintf(stderr, "flippers: failed to load '%s'\n", path);
+            fprintf(stderr, "flippers: failed to load '%s'\n", rel_path);
         }
     }
 }

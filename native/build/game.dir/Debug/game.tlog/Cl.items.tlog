@@ -1,4 +1,12 @@
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\audio\audio.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\audio.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\bgattr_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\bgattr_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\collision_angles_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\collision_angles_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\collision_maps_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\collision_maps_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\embedded_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\embedded_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\flipper_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\flipper_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\physics_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\physics_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\tilemap_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\tilemap_data.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\data\tilt_data.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\tilt_data.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\animation.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\animation.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\ball_gfx.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\ball_gfx.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\billboard.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\billboard.obj

@@ -24,6 +24,7 @@
 #include "game/constants.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include "renderer/stage_assets.h"
 #include "renderer/stage_palettes.h"
 #include "renderer/vram.h"
@@ -67,22 +68,16 @@ static size_t gengar_angles_size = 0;
 
 static void ensure_collision_angles_loaded(GameState *state) {
     if (!circle_collision_angles) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/circle_collision_angles.bin",
-                 state->asset_base_path);
-        circle_collision_angles = load_binary_file(path, &circle_angles_size);
+        circle_collision_angles = load_binary_data(state->asset_base_path,
+            "data/collision/circle_collision_angles.bin", &circle_angles_size);
     }
     if (!haunter_collision_angles) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/haunter_collision_angles.bin",
-                 state->asset_base_path);
-        haunter_collision_angles = load_binary_file(path, &haunter_angles_size);
+        haunter_collision_angles = load_binary_data(state->asset_base_path,
+            "data/collision/haunter_collision_angles.bin", &haunter_angles_size);
     }
     if (!gengar_collision_angles_data) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/gengar_collision_angles.bin",
-                 state->asset_base_path);
-        gengar_collision_angles_data = load_binary_file(path, &gengar_angles_size);
+        gengar_collision_angles_data = load_binary_data(state->asset_base_path,
+            "data/collision/gengar_collision_angles.bin", &gengar_angles_size);
     }
 }
 

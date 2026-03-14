@@ -25,6 +25,7 @@
 #include "game/constants.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include "renderer/stage_assets.h"
 #include "renderer/stage_palettes.h"
 #include "renderer/vram.h"
@@ -63,32 +64,12 @@ static size_t jewel_collision_angles_size = 0;
 
 static void ensure_meowth_angles_loaded(GameState *state) {
     if (!meowth_collision_angles) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/meowth_collision_angles.bin",
-                 state->asset_base_path);
-        FILE *f = fopen(path, "rb");
-        if (f) {
-            fseek(f, 0, SEEK_END);
-            meowth_collision_angles_size = (size_t)ftell(f);
-            fseek(f, 0, SEEK_SET);
-            meowth_collision_angles = malloc(meowth_collision_angles_size);
-            fread(meowth_collision_angles, 1, meowth_collision_angles_size, f);
-            fclose(f);
-        }
+        meowth_collision_angles = load_binary_data(state->asset_base_path,
+            "data/collision/meowth_collision_angles.bin", &meowth_collision_angles_size);
     }
     if (!jewel_collision_angles) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/meowth_jewel_collision_angles.bin",
-                 state->asset_base_path);
-        FILE *f = fopen(path, "rb");
-        if (f) {
-            fseek(f, 0, SEEK_END);
-            jewel_collision_angles_size = (size_t)ftell(f);
-            fseek(f, 0, SEEK_SET);
-            jewel_collision_angles = malloc(jewel_collision_angles_size);
-            fread(jewel_collision_angles, 1, jewel_collision_angles_size, f);
-            fclose(f);
-        }
+        jewel_collision_angles = load_binary_data(state->asset_base_path,
+            "data/collision/meowth_jewel_collision_angles.bin", &jewel_collision_angles_size);
     }
 }
 

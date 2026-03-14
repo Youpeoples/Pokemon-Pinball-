@@ -27,6 +27,7 @@
 #include "game/rng.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include "renderer/stage_assets.h"
 #include "renderer/vram.h"
 #include <string.h>
@@ -55,10 +56,8 @@ static size_t circle_angles_size_seel = 0;
 
 static void ensure_collision_angles_loaded(GameState *state) {
     if (!circle_collision_angles_seel) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/circle_collision_angles.bin",
-                 state->asset_base_path);
-        circle_collision_angles_seel = load_binary_file(path, &circle_angles_size_seel);
+        circle_collision_angles_seel = load_binary_data(state->asset_base_path,
+            "data/collision/circle_collision_angles.bin", &circle_angles_size_seel);
     }
 }
 

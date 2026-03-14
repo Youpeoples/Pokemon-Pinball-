@@ -32,6 +32,7 @@
 #include "audio/audio.h"
 #include "renderer/vram.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include "renderer/stage_assets.h"
 #include <string.h>
 #include <stdio.h>
@@ -3638,11 +3639,8 @@ void apply_slot_force_field(GameState *state) {
 
     /* Load force field data lazily on first use */
     if (!state->slot_force_field_data) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/ball_physics_f0000.bin",
-                 state->asset_base_path);
-        state->slot_force_field_data = load_binary_file(path,
-                                                         &state->slot_force_field_data_size);
+        state->slot_force_field_data = load_binary_data(state->asset_base_path,
+            "data/collision/ball_physics_f0000.bin", &state->slot_force_field_data_size);
         if (!state->slot_force_field_data) {
             fprintf(stderr, "red_field: failed to load slot force field data\n");
             return;

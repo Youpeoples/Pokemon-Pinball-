@@ -25,6 +25,7 @@
 #include "game/constants.h"
 #include "audio/audio.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include "renderer/stage_assets.h"
 #include "renderer/stage_palettes.h"
 #include "renderer/vram.h"
@@ -44,10 +45,8 @@ static size_t orb_physics_size = 0;
 
 static void ensure_orb_physics_loaded(GameState *state) {
     if (!orb_physics_data) {
-        char path[260];
-        snprintf(path, sizeof(path), "%s/data/collision/ball_physics_e4000.bin",
-                 state->asset_base_path);
-        orb_physics_data = load_binary_file(path, &orb_physics_size);
+        orb_physics_data = load_binary_data(state->asset_base_path,
+            "data/collision/ball_physics_e4000.bin", &orb_physics_size);
     }
 }
 

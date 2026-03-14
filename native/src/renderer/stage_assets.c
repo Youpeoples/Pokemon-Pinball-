@@ -8,6 +8,7 @@
 #include "renderer/stage_assets.h"
 #include "renderer/tile_loader.h"
 #include "renderer/stage_palettes.h"
+#include "data/embedded_data.h"
 #include "game/game_state.h"
 #include "game/config_data.h"
 #include <stdio.h>
@@ -792,9 +793,9 @@ bool load_stage_assets(uint8_t stage_id, VirtualVRAM *vram,
 
         } else if (entry->type == ASSET_TILEMAP) {
             size_t data_size;
-            uint8_t *map_data = load_binary_file(path_buf, &data_size);
+            uint8_t *map_data = load_binary_data(base_path, entry->filename, &data_size);
             if (!map_data) {
-                fprintf(stderr, "  WARN: failed to load tilemap from '%s'\n", path_buf);
+                fprintf(stderr, "  WARN: failed to load tilemap from '%s'\n", entry->filename);
                 success = false;
                 continue;
             }
@@ -874,9 +875,9 @@ bool load_screen_assets(uint8_t screen_id, VirtualVRAM *vram,
 
         } else if (entry->type == ASSET_TILEMAP) {
             size_t data_size;
-            uint8_t *map_data = load_binary_file(path_buf, &data_size);
+            uint8_t *map_data = load_binary_data(base_path, entry->filename, &data_size);
             if (!map_data) {
-                fprintf(stderr, "  WARN: failed to load tilemap from '%s'\n", path_buf);
+                fprintf(stderr, "  WARN: failed to load tilemap from '%s'\n", entry->filename);
                 success = false;
                 continue;
             }

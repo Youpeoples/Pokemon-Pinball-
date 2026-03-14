@@ -13,7 +13,7 @@
 #include "game/joypad.h"
 #include "game/config_data.h"
 #include "audio/audio.h"
-#include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -38,19 +38,13 @@ static bool tilt_tables_loaded  = false;
 static uint8_t **tilt_force_table[8];
 
 static void load_tilt_tables(const char *base_path) {
-    char path[260];
     size_t sz;
 
-    snprintf(path, sizeof(path), "%s/data/tilt/left_only", base_path);
-    tilt_left_only = load_binary_file(path, &sz);
-    snprintf(path, sizeof(path), "%s/data/tilt/right_only", base_path);
-    tilt_right_only = load_binary_file(path, &sz);
-    snprintf(path, sizeof(path), "%s/data/tilt/up_only", base_path);
-    tilt_up_only = load_binary_file(path, &sz);
-    snprintf(path, sizeof(path), "%s/data/tilt/up_left", base_path);
-    tilt_up_left = load_binary_file(path, &sz);
-    snprintf(path, sizeof(path), "%s/data/tilt/up_right", base_path);
-    tilt_up_right = load_binary_file(path, &sz);
+    tilt_left_only = load_binary_data(base_path, "data/tilt/left_only", &sz);
+    tilt_right_only = load_binary_data(base_path, "data/tilt/right_only", &sz);
+    tilt_up_only = load_binary_data(base_path, "data/tilt/up_only", &sz);
+    tilt_up_left = load_binary_data(base_path, "data/tilt/up_left", &sz);
+    tilt_up_right = load_binary_data(base_path, "data/tilt/up_right", &sz);
 
     /* Build pointer table matching ASM TiltForces (0x372d) */
     tilt_force_table[0] = NULL;              /* 000: no tilt */

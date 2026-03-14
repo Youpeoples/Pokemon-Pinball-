@@ -14,6 +14,7 @@
 
 #include "game/collision.h"
 #include "renderer/tile_loader.h"
+#include "data/embedded_data.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -433,16 +434,15 @@ void load_stage_collision_attributes(GameState *state) {
     char path[260];
 
     /* Load collision map (.collision binary file = 0x300 bytes) */
+    const char *map_rel_path;
     if (collision_map_override) {
-        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path,
-                 collision_map_override);
+        map_rel_path = collision_map_override;
     } else {
-        const char *map_file = get_collision_map_filename(
+        map_rel_path = get_collision_map_filename(
             state->current_stage, state->stage_collision_state);
-        snprintf(path, sizeof(path), "%s/%s", state->asset_base_path, map_file);
     }
     size_t map_size = 0;
-    uint8_t *map_data = load_binary_file(path, &map_size);
+    uint8_t *map_data = load_binary_data(state->asset_base_path, map_rel_path, &map_size);
     if (map_data && map_size >= 0x300) {
         memcpy(state->stage_collision_map, map_data, 0x300);
     } else if (map_data) {
@@ -450,7 +450,7 @@ void load_stage_collision_attributes(GameState *state) {
         memset(state->stage_collision_map + map_size, 0, 0x300 - map_size);
     } else {
         memset(state->stage_collision_map, 0, 0x300);
-        fprintf(stderr, "collision: failed to load map '%s'\n", path);
+        fprintf(stderr, "collision: failed to load map '%s'\n", map_rel_path);
     }
     free(map_data);
 
