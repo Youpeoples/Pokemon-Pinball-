@@ -22,6 +22,7 @@
 #include "game/main_loop.h"
 #include "game/joypad.h"
 #include "game/save.h"
+#include "game/editor.h"
 #include <string.h>
 
 /* GBC runs at ~59.7275 Hz */
@@ -196,6 +197,53 @@ int main(int argc, char *argv[]) {
             platform_toggle_fullscreen(platform);
         }
 
+        /* F12 toggles editor mode */
+        if (platform_consume_f12_toggle(platform)) {
+            editor_toggle(state, platform);
+        }
+
+        /* F5 starts playtest (only in editor mode) */
+        if (platform_consume_f5_toggle(platform)) {
+            if (state->editor_mode && state->editor_state) {
+                editor_start_playtest(state->editor_state, state);
+            }
+        }
+
+        /* F6 hot-reloads Lua scripts (only during playtest) */
+        if (platform_consume_f6_toggle(platform)) {
+            if (state->editor_state && state->editor_state->playtesting) {
+                editor_hot_reload(state->editor_state, state);
+            }
+        }
+
+        /* ESC handling for editor modes */
+        if (platform_consume_esc(platform)) {
+            if (state->editor_state && state->editor_state->playtesting) {
+                /* During playtest: return to editor */
+                editor_stop_playtest(state->editor_state, state);
+                platform_set_esc_quits(platform, false);
+            } else if (state->editor_mode && state->editor_state) {
+                if (state->editor_state->screen == EDITOR_SCREEN_EDITOR) {
+                    /* In editor viewport: go back to picker */
+                    state->editor_state->screen = EDITOR_SCREEN_PICKER;
+                } else {
+                    /* In picker: exit editor entirely */
+                    editor_toggle(state, platform);
+                }
+            }
+        }
+
+        /* Mouse wheel zoom for editor */
+        if (state->editor_mode && state->editor_state) {
+            int wheel = platform_consume_mouse_wheel(platform);
+            if (wheel != 0) {
+                EditorState *ed = state->editor_state;
+                ed->target_zoom += (float)wheel * 0.5f;
+                if (ed->target_zoom < 0.5f) ed->target_zoom = 0.5f;
+                if (ed->target_zoom > 8.0f) ed->target_zoom = 8.0f;
+            }
+        }
+
         /* Mouse click repositions ball when debug is active + pinball physics */
         {
             int mx, my;
@@ -216,27 +264,36 @@ int main(int argc, char *argv[]) {
 
         /* Fixed timestep game update */
         while (accumulator >= FRAME_TIME_MS) {
-            /* Read joypad (equivalent to ReadJoypad in home/joypad.asm) */
-            joypad_update(state, platform);
-
-            /* Increment frame counter before game logic (ASM: VBlank handler
-             * increments hFrameCounter before game logic runs) */
-            state->hram.frame_counter++;
-
-            /* Run one frame of game logic (equivalent to Main in home.asm) */
-            {
-                double t0 = platform_get_time_ms(platform);
-                main_loop_update(state);
-                double t1 = platform_get_time_ms(platform);
-                if (t1 - t0 > 500.0) {
-                    printf("[WATCHDOG] main_loop_update took %.0fms! screen=%d state=%d stage=0x%02X\n",
-                        t1 - t0, state->current_screen, state->screen_state, state->current_stage);
-                    fflush(stdout);
+            if (state->editor_mode) {
+                /* Editor mode: update editor instead of game logic */
+                if (state->editor_state) {
+                    editor_update(state->editor_state, platform, state);
                 }
-            }
+                /* Still update audio so it doesn't go silent */
+                audio_update(audio);
+            } else {
+                /* Read joypad (equivalent to ReadJoypad in home/joypad.asm) */
+                joypad_update(state, platform);
 
-            /* Update audio engine (synthesize one frame of audio) */
-            audio_update(audio);
+                /* Increment frame counter before game logic (ASM: VBlank handler
+                 * increments hFrameCounter before game logic runs) */
+                state->hram.frame_counter++;
+
+                /* Run one frame of game logic (equivalent to Main in home.asm) */
+                {
+                    double t0 = platform_get_time_ms(platform);
+                    main_loop_update(state);
+                    double t1 = platform_get_time_ms(platform);
+                    if (t1 - t0 > 500.0) {
+                        printf("[WATCHDOG] main_loop_update took %.0fms! screen=%d state=%d stage=0x%02X\n",
+                            t1 - t0, state->current_screen, state->screen_state, state->current_stage);
+                        fflush(stdout);
+                    }
+                }
+
+                /* Update audio engine (synthesize one frame of audio) */
+                audio_update(audio);
+            }
 
             /* Count game logic frames for FPS display (not render frames) */
             fps_frame_count++;
@@ -252,12 +309,20 @@ int main(int argc, char *argv[]) {
         }
 
         /* Render current frame */
-        renderer_begin_frame(renderer);
-        renderer_draw_game(renderer, state);
-        if (state->debug_mode > 0) {
-            renderer_draw_debug_overlay(renderer, state);
+        if (state->editor_mode && state->editor_state) {
+            /* Editor renders directly to SDL, bypassing tile renderer */
+            editor_render(state->editor_state, renderer, platform);
+        } else {
+            renderer_begin_frame(renderer);
+            renderer_draw_game(renderer, state);
+            if (state->editor_state && state->editor_state->playtesting) {
+                renderer_draw_playtest_banner(renderer);
+            }
+            if (state->debug_mode > 0) {
+                renderer_draw_debug_overlay(renderer, state);
+            }
+            renderer_end_frame(renderer);
         }
-        renderer_end_frame(renderer);
     }
 
     /* Cleanup */

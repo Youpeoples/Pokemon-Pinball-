@@ -55,6 +55,15 @@
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_serialize.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c">
       <Filter>Source Files</Filter>
     </ClCompile>

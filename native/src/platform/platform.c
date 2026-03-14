@@ -17,6 +17,12 @@ struct Platform {
     bool mouse_clicked;    /* Left mouse button was clicked */
     int mouse_gbc_x;       /* Click position in GBC logical coords */
     int mouse_gbc_y;
+    bool f5_pressed;       /* Edge-detected F5 for playtest */
+    bool f6_pressed;       /* Edge-detected F6 for hot-reload */
+    bool f12_pressed;      /* Edge-detected F12 toggle for editor */
+    int mouse_wheel;       /* Accumulated mouse wheel delta */
+    bool esc_pressed;      /* Edge-detected ESC press */
+    bool esc_quits;        /* Whether ESC should quit (default true, disabled in editor) */
 };
 
 /* Default keyboard mapping (matches original GBC controls) */
@@ -73,6 +79,8 @@ Platform *platform_init(int screen_w, int screen_h, int scale) {
         return NULL;
     }
 
+    p->esc_quits = true; /* Default: ESC quits the app */
+
     /* Nearest-neighbor scaling for crisp pixels */
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
@@ -106,8 +114,10 @@ bool platform_poll_events(Platform *p) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) return false;
-        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-            return false;
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            if (p->esc_quits) return false;
+            p->esc_pressed = true;
         }
         if (event.type == SDL_KEYDOWN && !event.key.repeat &&
             event.key.keysym.scancode == SDL_SCANCODE_F1) {
@@ -116,6 +126,21 @@ bool platform_poll_events(Platform *p) {
         if (event.type == SDL_KEYDOWN && !event.key.repeat &&
             event.key.keysym.scancode == SDL_SCANCODE_F11) {
             p->fullscreen_toggle = true;
+        }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_F5) {
+            p->f5_pressed = true;
+        }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_F6) {
+            p->f6_pressed = true;
+        }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_F12) {
+            p->f12_pressed = true;
+        }
+        if (event.type == SDL_MOUSEWHEEL) {
+            p->mouse_wheel += event.wheel.y;
         }
         if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
             /* Translate click position using viewport rect for correct coords
@@ -217,6 +242,49 @@ void platform_toggle_fullscreen(Platform *p) {
     p->fullscreen = !p->fullscreen;
     SDL_SetWindowFullscreen(p->window,
         p->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+}
+
+bool platform_consume_f5_toggle(Platform *p) {
+    bool was = p->f5_pressed;
+    p->f5_pressed = false;
+    return was;
+}
+
+bool platform_consume_f6_toggle(Platform *p) {
+    bool was = p->f6_pressed;
+    p->f6_pressed = false;
+    return was;
+}
+
+bool platform_consume_f12_toggle(Platform *p) {
+    bool was = p->f12_pressed;
+    p->f12_pressed = false;
+    return was;
+}
+
+int platform_consume_mouse_wheel(Platform *p) {
+    int w = p->mouse_wheel;
+    p->mouse_wheel = 0;
+    return w;
+}
+
+void platform_get_mouse_pos(Platform *p, int *x, int *y) {
+    (void)p;
+    SDL_GetMouseState(x, y);
+}
+
+void *platform_get_sdl_window(Platform *p) {
+    return p->window;
+}
+
+bool platform_consume_esc(Platform *p) {
+    bool was = p->esc_pressed;
+    p->esc_pressed = false;
+    return was;
+}
+
+void platform_set_esc_quits(Platform *p, bool quits) {
+    p->esc_quits = quits;
 }
 
 void platform_get_viewport_rect(Platform *p, int logical_w, int logical_h,

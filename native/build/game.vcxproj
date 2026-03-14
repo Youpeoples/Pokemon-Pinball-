@@ -650,6 +650,9 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\diglett_bonus.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_blue_field.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_serialize.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\game_state.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\gengar_bonus.c" />

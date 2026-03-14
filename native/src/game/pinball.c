@@ -21,6 +21,7 @@
 #include "game/tilt.h"
 #include "game/config_data.h"
 #include "game/scripting.h"
+#include "game/editor.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "game/joypad.h"
@@ -1065,6 +1066,21 @@ skip_ball_init:
     }
 
     load_stage_collision_attributes(state);
+
+    /* If playtesting from editor, override collision with editor's custom data.
+     * Editor rows map to collision rows offset by 3 (first 3 rows are buffer). */
+    if (state->editor_state && state->editor_state->playtesting &&
+        state->editor_state->playtest_has_collision) {
+        EditorState *ed = state->editor_state;
+        uint8_t (*src)[32] = (state->current_stage & 1) ?
+            ed->playtest_collision_bottom : ed->playtest_collision_top;
+        for (int r = 0; r < 21; r++) {
+            for (int c = 0; c < 32; c++) {
+                state->stage_collision_map[(r + 3) * 32 + c] = src[r][c];
+            }
+        }
+    }
+
     if (state->current_stage == STAGE_RED_FIELD_TOP) {
         load_stage_data_red_field_top(state);
     } else if (state->current_stage == STAGE_RED_FIELD_BOTTOM) {

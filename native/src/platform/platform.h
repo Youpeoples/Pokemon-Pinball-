@@ -46,6 +46,30 @@ bool platform_consume_mouse_click(Platform *platform, int *out_x, int *out_y);
 /* Returns true (and clears) if F11 was pressed since last call */
 bool platform_consume_fullscreen_toggle(Platform *platform);
 
+/* Returns true (and clears) if F5 was pressed since last call */
+bool platform_consume_f5_toggle(Platform *platform);
+
+/* Returns true (and clears) if F6 was pressed since last call */
+bool platform_consume_f6_toggle(Platform *platform);
+
+/* Returns true (and clears) if F12 was pressed since last call */
+bool platform_consume_f12_toggle(Platform *platform);
+
+/* Returns the mouse wheel scroll delta since last call (positive=up) */
+int platform_consume_mouse_wheel(Platform *platform);
+
+/* Get raw mouse position in window coordinates */
+void platform_get_mouse_pos(Platform *platform, int *x, int *y);
+
+/* Get the SDL_Window pointer (for editor) */
+void *platform_get_sdl_window(Platform *platform);
+
+/* Returns true (and clears) if ESC was pressed since last call */
+bool platform_consume_esc(Platform *platform);
+
+/* Control whether ESC quits the application (disabled when editor is active) */
+void platform_set_esc_quits(Platform *platform, bool quits);
+
 /* Toggle between windowed and borderless fullscreen */
 void platform_toggle_fullscreen(Platform *platform);
 

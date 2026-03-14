@@ -1,0 +1,350 @@
+/*
+ * Stage Builder / Editor Mode
+ *
+ * In-game editor for creating and modifying pinball tables.
+ * F12 opens editor from any screen. Table picker lets you choose which
+ * table folder to edit. Game state is snapshot/restored on entry/exit.
+ *
+ * Architecture:
+ *   editor.h/.c       - Core state, lifecycle, mode toggle
+ *   editor_render.h/.c - Viewport camera, rendering, UI
+ *   editor_serialize.h/.c - Export EditorTable to Lua files + manifest
+ */
+
+#ifndef EDITOR_H
+#define EDITOR_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "game/types.h"
+#include "game/constants.h"
+
+/* Forward declarations */
+typedef struct GameState GameState;
+typedef struct Platform Platform;
+typedef struct Renderer Renderer;
+typedef struct VirtualVRAM VirtualVRAM;
+
+/*=============================================================================
+ * Editor Constants
+ *===========================================================================*/
+#define MAX_EDITOR_OBJECTS    64
+#define MAX_EDITOR_UNDO      64
+#define EDITOR_GRID_SIZE      8    /* Default grid snap: 8px (1 tile) */
+#define MAX_PICKER_TABLES    16
+#define UI_SCALE              2    /* Scale factor for all UI text/panels */
+
+/* Component type IDs */
+typedef enum {
+    COMP_NONE = 0,
+    COMP_BUMPER,           /* Voltorb / Shellder (14x14 bbox) */
+    COMP_SPINNER,          /* Spinner (8x4 bbox) */
+    COMP_BALL_UPGRADE,     /* Ball upgrade trigger (6x5 bbox) */
+    COMP_PIKACHU_SAVER,    /* Pikachu saver (3x5 bbox) */
+    COMP_CAVE_LIGHT,       /* CAVE light (5x3 bbox) */
+    COMP_DIGLETT,          /* Diglett map counter (8x12 bbox) */
+    COMP_FIELD_CREATURE,   /* Bellsprout/Cloyster/Slowpoke (6x5 bbox) */
+    COMP_STARYU,           /* Staryu (8x6 bbox) */
+    COMP_SLOT_MACHINE,     /* Slot machine (4x4 bbox) */
+    COMP_RAILING,          /* Bonus multiplier railing (7x7 bbox) */
+    COMP_LAUNCH_ALLEY,     /* Ball launch area (8x8 bbox) */
+    COMP_WILD_POKEMON,     /* Wild mon target (26x26 bbox) */
+    COMP_BOARD_TRIGGER,    /* Board trigger (9x9 bbox) */
+    COMP_DITTO_SLOT,       /* Ditto slot for evolution (3x3 bbox) */
+    COMP_COUNT
+} ComponentType;
+
+/* Property types for the inspector */
+typedef enum {
+    PROP_INT,
+    PROP_HEX,
+    PROP_BOOL,
+    PROP_STRING,
+    PROP_COUNT
+} PropertyType;
+
+/*=============================================================================
+ * Editor Screen (which phase of the editor we're in)
+ *===========================================================================*/
+typedef enum {
+    EDITOR_SCREEN_PICKER,    /* Table picker: choose which table to edit */
+    EDITOR_SCREEN_EDITOR,    /* Main editor viewport */
+} EditorScreen;
+
+/*=============================================================================
+ * Table Picker Entry
+ *===========================================================================*/
+typedef struct {
+    char name[64];           /* Display name from manifest */
+    char folder[128];        /* Full path to table folder */
+    char folder_name[64];    /* Just the folder name */
+    bool is_builtin;
+} PickerEntry;
+
+/*=============================================================================
+ * Property Definition (schema for component properties)
+ *===========================================================================*/
+typedef struct {
+    const char *name;
+    PropertyType type;
+    int default_value;
+    const char *description;
+} PropertyDef;
+
+/*=============================================================================
+ * Editor Object (placed component on the table)
+ *===========================================================================*/
+typedef struct {
+    ComponentType type;
+    uint8_t x, y;               /* World position */
+    uint8_t x_thresh, y_thresh; /* Bounding box half-widths */
+    bool attribute_gated;
+    uint8_t attrs[16];          /* Collision attributes (if gated) */
+    int num_attrs;
+    int score;                  /* Points on hit */
+    int bounce_force;           /* Force applied on collision (hex) */
+    int sfx_id;                 /* Sound effect ID */
+    char custom_lua[256];       /* Optional custom Lua handler */
+    bool selected;
+} EditorObject;
+
+/*=============================================================================
+ * Editor Table (complete editable stage data)
+ *===========================================================================*/
+typedef struct {
+    char name[64];
+    char source_folder[128];           /* Folder this was loaded from (for save) */
+    uint8_t tilemap[64][32];           /* BG tile indices (top 0-17, bottom 18-35 for combined) */
+    uint8_t tilemap_attrs[64][32];     /* Palette, flip, bank */
+    uint8_t collision_map[64][32];     /* Collision attribute IDs */
+    int tilemap_rows;                  /* 18 (single visible) or 36 (combined top+bottom visible) */
+    int tilemap_cols;                  /* 20 (visible GBC screen width in tiles) */
+    GBCPalette bg_palettes[8];
+    GBCPalette obj_palettes[8];
+    EditorObject objects[MAX_EDITOR_OBJECTS];
+    int num_objects;
+    uint8_t default_scx;
+    bool has_flippers;
+    uint8_t stage_id;
+    bool dirty;                        /* Unsaved changes */
+    bool unsigned_addressing;          /* LCDC bit 4: tile addressing mode */
+    bool has_vram;                     /* True if VRAM tile data is available */
+} EditorTable;
+
+/*=============================================================================
+ * Editor Tool Mode
+ *===========================================================================*/
+typedef enum {
+    TOOL_SELECT,       /* Click to select/move objects */
+    TOOL_PLACE,        /* Click to place from palette */
+    TOOL_TILE_PAINT,   /* Paint tilemap */
+    TOOL_COLL_PAINT,   /* Paint collision attributes */
+    TOOL_ERASE,        /* Delete objects */
+} EditorTool;
+
+/*=============================================================================
+ * Editor State (master struct)
+ *===========================================================================*/
+typedef struct EditorState {
+    /* Which screen we're on */
+    EditorScreen screen;
+
+    /* UI scale factor */
+    int ui_scale;
+
+    /* Table picker */
+    PickerEntry picker_tables[MAX_PICKER_TABLES];
+    int picker_num_tables;
+    int picker_cursor;
+    bool picker_scanned;
+
+    /* Viewport camera */
+    float camera_x, camera_y;     /* World position (top-left corner) */
+    float zoom;                    /* 1.0 = 1 tile = 8 screen pixels */
+    float target_zoom;             /* Smooth zoom target */
+    int drag_start_x, drag_start_y;  /* For pan dragging */
+    bool panning;
+
+    /* Grid */
+    bool show_grid;
+    bool snap_to_grid;
+    int grid_size;                 /* 8 = tile, 1 = pixel */
+
+    /* Overlays */
+    bool show_collision_overlay;
+    bool show_object_bounds;
+
+    /* Current tool */
+    EditorTool current_tool;
+    ComponentType palette_selection;   /* Which component to place */
+
+    /* Selection */
+    int selected_object;           /* Index into table.objects, -1 = none */
+    bool dragging_object;
+    int drag_offset_x, drag_offset_y;
+
+    /* Collision tile hover state */
+    int hovered_coll_col;          /* Tile column under mouse (-1 = none) */
+    int hovered_coll_row;          /* Display row under mouse (-1 = none) */
+    uint8_t hovered_coll_attr;     /* Collision attribute at hovered tile */
+
+    /* Collision tile selection */
+    int selected_coll_col;         /* Selected collision tile column (-1 = none) */
+    int selected_coll_row;         /* Selected collision tile display row (-1 = none) */
+    uint8_t selected_coll_attr;    /* Attribute value of selected tile */
+    bool dragging_coll_tile;       /* True when drag-moving a collision tile */
+    int drag_coll_src_col;         /* Source column for drag-move */
+    int drag_coll_src_row;         /* Source display row for drag-move */
+
+    /* Editor table data */
+    EditorTable table;
+
+    /* Playtest state */
+    bool playtesting;
+
+    /* Playtest collision injection */
+    uint8_t playtest_collision_top[64][32];    /* Editor collision for top stage */
+    uint8_t playtest_collision_bottom[64][32]; /* Editor collision for bottom stage */
+    bool playtest_has_collision;               /* True = override collision after load */
+
+    /* Saved game state for snapshot/restore on editor entry/exit */
+    uint8_t *saved_game_state;     /* malloc'd copy of GameState */
+    size_t saved_game_state_size;
+
+    /* Editor framebuffer (larger than 160x144 for the viewport) */
+    uint32_t *framebuffer;
+    int fb_width, fb_height;
+
+    /* Mouse state (in screen coordinates) */
+    int mouse_x, mouse_y;
+    bool mouse_left_down, mouse_right_down, mouse_middle_down;
+    bool mouse_left_clicked, mouse_right_clicked;
+    int mouse_wheel_delta;
+
+    /* Sidebar state */
+    int palette_scroll;
+    int inspector_scroll;
+
+    /* Property inspector state */
+    int inspector_active_field;    /* Which property field is being edited (-1 = none) */
+    char inspector_edit_buf[64];   /* Text input buffer for active field */
+    int inspector_cursor;          /* Cursor position in edit buffer */
+
+    /* Tile painting state */
+    uint8_t paint_tile_index;      /* Which tile index to paint */
+    uint8_t paint_tile_palette;    /* Palette for painted tiles */
+    uint8_t paint_coll_attr;       /* Collision attribute to paint */
+
+    /* VRAM reference for tilemap preview (points to live VRAM, safe while game paused) */
+    VirtualVRAM *vram_ref;
+
+    /* VRAM tile data snapshots for combined top+bottom view */
+    uint8_t vram_top[2][6144];         /* 2 banks of tile data, top stage */
+    uint8_t vram_bottom[2][6144];      /* 2 banks of tile data, bottom stage */
+    GBCPalette palettes_top[8];        /* Top stage BG palettes */
+    GBCPalette palettes_bottom[8];     /* Bottom stage BG palettes */
+    bool combined_view;                /* True = both halves loaded */
+    bool hide_buffer_rows;             /* True = skip off-screen buffer rows (18-31 per half) */
+    uint8_t top_stage_id;
+    uint8_t bottom_stage_id;
+
+    /* Undo stack */
+    EditorTable *undo_stack;           /* malloc'd array[MAX_EDITOR_UNDO] */
+    int undo_count;                    /* Number of snapshots stored */
+    bool undo_pushed_this_stroke;      /* Prevents multiple pushes per drag/stroke */
+
+    /* Save flash indicator */
+    int save_flash_timer;              /* Counts down frames, shows "SAVED!" when > 0 */
+
+    /* Center view on table open */
+    bool needs_center_view;
+
+    /* Asset base path (for scanning tables/ directory) */
+    char asset_base_path[260];
+
+    /* Editor active flag */
+    bool active;
+} EditorState;
+
+/*=============================================================================
+ * Editor Lifecycle
+ *===========================================================================*/
+
+/* Create editor state (allocated on first use) */
+EditorState *editor_create(void);
+
+/* Free editor state and all resources */
+void editor_free(EditorState *editor);
+
+/* Toggle editor mode on/off. Opens table picker from any screen. */
+void editor_toggle(GameState *state, Platform *platform);
+
+/* Enter editor mode with table picker */
+void editor_enter(EditorState *editor, GameState *state);
+
+/* Exit editor mode (restore game state) */
+void editor_exit(EditorState *editor, GameState *state);
+
+/*=============================================================================
+ * Editor Update & Render (called from main loop when editor_mode == 1)
+ *===========================================================================*/
+
+/* Process one frame of editor input and logic */
+void editor_update(EditorState *editor, Platform *platform, GameState *state);
+
+/* Render the editor viewport and UI */
+void editor_render(EditorState *editor, Renderer *renderer, Platform *platform);
+
+/*=============================================================================
+ * Component Info
+ *===========================================================================*/
+
+/* Get the display name for a component type */
+const char *editor_component_name(ComponentType type);
+
+/* Get default bounding box for a component type */
+void editor_component_default_bbox(ComponentType type, uint8_t *x_thresh, uint8_t *y_thresh);
+
+/* Get default score for a component type */
+int editor_component_default_score(ComponentType type);
+
+/* Import current stage from game state into editor table (internal) */
+void editor_import_current_stage(EditorState *editor, GameState *state);
+
+/* Map a display row to a data row (accounts for hidden buffer rows in combined view).
+ * display_row: 0-based row in the visible layout
+ * Returns: index into tilemap[][]/collision_map[][] arrays */
+static inline int editor_display_to_data_row(EditorState *e, int display_row) {
+    if (!e->combined_view || !e->hide_buffer_rows) return display_row;
+    /* Compact layout: display 0-17 = data 0-17 (top visible),
+     *                 display 18-35 = data 32-49 (bottom visible) */
+    if (display_row < 18) return display_row;
+    return display_row - 18 + 32;
+}
+
+/* Get the number of display rows (may differ from tilemap_rows when buffer is hidden) */
+static inline int editor_display_rows(EditorState *e) {
+    if (e->combined_view && e->hide_buffer_rows) return 36;  /* 18 + 18 */
+    return e->table.tilemap_rows > 0 ? e->table.tilemap_rows : 32;
+}
+
+/* Scan tables/ directory for available table folders */
+void editor_scan_tables(EditorState *editor);
+
+/* Open a table folder for editing (load manifest, init editor) */
+void editor_open_table(EditorState *editor, int picker_index, GameState *state);
+
+/*=============================================================================
+ * Live Playtest
+ *===========================================================================*/
+
+/* Start playtesting the editor table (F5) */
+void editor_start_playtest(EditorState *editor, GameState *state);
+
+/* Stop playtesting and return to editor (ESC during playtest) */
+void editor_stop_playtest(EditorState *editor, GameState *state);
+
+/* Hot-reload Lua scripts only (F6 during playtest) */
+void editor_hot_reload(EditorState *editor, GameState *state);
+
+#endif /* EDITOR_H */

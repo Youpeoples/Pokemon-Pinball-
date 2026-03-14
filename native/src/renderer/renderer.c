@@ -764,6 +764,25 @@ void renderer_draw_debug_overlay(Renderer *renderer, GameState *state) {
     }
 }
 
+void renderer_draw_playtest_banner(Renderer *renderer) {
+    uint32_t *fb = renderer->framebuffer;
+    int fw = renderer->screen_w;
+    int fh = renderer->screen_h;
+
+    /* Semi-transparent dark bar at the top */
+    int bar_h = DEBUG_FONT_H + 3;
+    debug_draw_bg_rect(fb, fw, fh, 0, 0, fw, bar_h);
+
+    /* Draw banner text */
+    uint32_t yellow = 0xFFFF40FF;
+    uint32_t white  = 0xFFFFFFFF;
+    int x = 2;
+    int y = 2;
+    debug_draw_string(fb, fw, fh, x, y, "PLAYTEST", yellow);
+    x += 9 * (DEBUG_FONT_W + DEBUG_CHAR_SPACING);
+    debug_draw_string(fb, fw, fh, x, y, "ESC=Exit Z=Launch", white);
+}
+
 void renderer_end_frame(Renderer *renderer) {
     SDL_UpdateTexture(
         renderer->framebuffer_tex, NULL,

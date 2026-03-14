@@ -41,4 +41,7 @@ void decode_tile_2bpp_hflip(const uint8_t *tile_data, uint8_t *pixels);
 /* Draw debug overlay (FPS, screen/stage, ball state) onto the framebuffer */
 void renderer_draw_debug_overlay(Renderer *renderer, GameState *state);
 
+/* Draw playtest banner (ESC/launch hints) at top of screen during editor playtest */
+void renderer_draw_playtest_banner(Renderer *renderer);
+
 #endif /* RENDERER_H */

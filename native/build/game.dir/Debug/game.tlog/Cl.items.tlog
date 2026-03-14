@@ -16,6 +16,9 @@ C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\config_data.c;
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\diglett_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\diglett_bonus.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_blue_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_blue_field.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_red_field.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor_render.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_serialize.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor_serialize.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\flippers.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\game_state.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\game_state.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\gengar_bonus.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\gengar_bonus.obj

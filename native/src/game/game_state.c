@@ -7,6 +7,7 @@
 
 #include "game/game_state.h"
 #include "game/config_data.h"
+#include "game/editor.h"
 #include "game/rng.h"
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,7 @@ void game_state_reset(GameState *state) {
     uint8_t *saved_vwf_font_gfx = state->vwf_font_gfx;
     uint8_t *saved_slot_force_field_data = state->slot_force_field_data;
     uint8_t saved_debug_mode = state->debug_mode;
+    void *saved_editor_state = state->editor_state;
     char saved_asset_base_path[260];
     memcpy(saved_asset_base_path, state->asset_base_path, sizeof(saved_asset_base_path));
     char saved_active_table_folder[64];
@@ -47,6 +49,7 @@ void game_state_reset(GameState *state) {
     state->vwf_font_gfx = saved_vwf_font_gfx;
     state->slot_force_field_data = saved_slot_force_field_data;
     state->debug_mode = saved_debug_mode;
+    state->editor_state = saved_editor_state;
     memcpy(state->asset_base_path, saved_asset_base_path, sizeof(state->asset_base_path));
     memcpy(state->active_table_folder, saved_active_table_folder, sizeof(state->active_table_folder));
 
@@ -176,6 +179,7 @@ void reset_high_scores_to_defaults(GameState *state) {
 void game_state_free(GameState *state) {
     if (state) {
         config_data_free(state->config);
+        editor_free(state->editor_state);
         free(state->vwf_font_gfx);
         free(state->slot_force_field_data);
         free(state);

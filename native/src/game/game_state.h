@@ -9,6 +9,7 @@ typedef struct VirtualVRAM VirtualVRAM;
 typedef struct AudioEngine AudioEngine;
 typedef struct ConfigData ConfigData;
 typedef struct ScriptEngine ScriptEngine;
+typedef struct EditorState EditorState;
 
 /*=============================================================================
  * Field Select - Dynamic Table Discovery
@@ -879,6 +880,10 @@ typedef struct GameState {
     /* --- Lua scripting engine (not in original GBC) --- */
     ScriptEngine *script_engine;    /* Lua scripting engine for moddable table logic */
     char active_table_folder[64];   /* Custom table folder override for scripting */
+
+    /* --- Stage builder / editor mode (not in original GBC) --- */
+    uint8_t editor_mode;            /* F12 toggles: 0=off, 1=editor active */
+    EditorState *editor_state;      /* Allocated on first use, persists across resets */
 
     /* --- Debug overlay (not in original GBC) --- */
     uint8_t debug_mode;             /* F1 toggles: 0=off, 1=text overlay */
