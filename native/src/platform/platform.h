@@ -43,4 +43,15 @@ bool platform_consume_f1_toggle(Platform *platform);
  * out_x/out_y receive the click position in GBC logical coordinates (0-159, 0-143). */
 bool platform_consume_mouse_click(Platform *platform, int *out_x, int *out_y);
 
+/* Returns true (and clears) if F11 was pressed since last call */
+bool platform_consume_fullscreen_toggle(Platform *platform);
+
+/* Toggle between windowed and borderless fullscreen */
+void platform_toggle_fullscreen(Platform *platform);
+
+/* Compute the pixel-perfect viewport rect for the game framebuffer.
+ * Returns the destination rectangle (x, y, w, h) centered in the window. */
+void platform_get_viewport_rect(Platform *platform, int logical_w, int logical_h,
+                                int *out_x, int *out_y, int *out_w, int *out_h);
+
 #endif /* PLATFORM_H */

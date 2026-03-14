@@ -361,6 +361,9 @@ void audio_play_music(AudioEngine *e, uint8_t bank, uint8_t id) {
 
     printf("[Audio] Playing music: bank=0x%02X id=%d size=%d\n", bank, id, entry->size);
 
+    /* Stop any custom WAV music — bytecode and WAV are mutually exclusive */
+    e->custom_music_clip = -1;
+
     /* Clear SDL audio queue to avoid latency from buffered old audio */
     platform_audio_clear(e->platform);
 
@@ -579,6 +582,7 @@ void audio_play_cry(AudioEngine *e, uint8_t mon_id) {
 void audio_stop_all(AudioEngine *e) {
     if (!e) return;
     engine_init(e);
+    e->custom_music_clip = -1;
 }
 
 void audio_set_volume(AudioEngine *e, uint8_t left, uint8_t right) {
@@ -2092,6 +2096,7 @@ void audio_stop_custom_music(AudioEngine *e) {
     if (!e) return;
     e->custom_music_clip = -1;
 }
+
 
 void audio_cleanup_custom(AudioEngine *e) {
     if (!e) return;

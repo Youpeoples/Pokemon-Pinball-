@@ -83,7 +83,6 @@ end
 --============================================================
 function on_ball_init(stage_id)
     apply_gold_palettes()
-    pinball.play_table_music("stage")
 end
 
 --============================================================

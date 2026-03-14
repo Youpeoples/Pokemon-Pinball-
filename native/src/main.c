@@ -191,6 +191,11 @@ int main(int argc, char *argv[]) {
             state->debug_mode = state->debug_mode ? 0 : 1;
         }
 
+        /* F11 toggles fullscreen */
+        if (platform_consume_fullscreen_toggle(platform)) {
+            platform_toggle_fullscreen(platform);
+        }
+
         /* Mouse click repositions ball when debug is active + pinball physics */
         {
             int mx, my;

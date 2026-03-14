@@ -136,6 +136,15 @@ void script_call_on_attribute_collision(ScriptEngine *engine, uint8_t attr_id);
 void script_call_on_ball_saved(ScriptEngine *engine);
 
 /*=============================================================================
+ * Table Music Helper
+ *===========================================================================*/
+
+/* Try to play the loaded table's custom stage music for the given music name.
+ * If the active table has a "stage" music clip and name is "red_field" or
+ * "blue_field", plays that clip and returns true. Otherwise returns false. */
+bool script_try_play_stage_music(GameState *state, const char *name);
+
+/*=============================================================================
  * Lua API Registration (implemented in script_api.c)
  *===========================================================================*/
 

@@ -23,6 +23,7 @@ struct Renderer {
     int screen_w;
     int screen_h;
     VirtualVRAM *vram;
+    Platform *platform;
 };
 
 Renderer *renderer_init(Platform *platform, int screen_w, int screen_h) {
@@ -30,6 +31,7 @@ Renderer *renderer_init(Platform *platform, int screen_w, int screen_h) {
     if (!r) return NULL;
 
     r->sdl_renderer = (SDL_Renderer *)platform_get_sdl_renderer(platform);
+    r->platform = platform;
     r->screen_w = screen_w;
     r->screen_h = screen_h;
 
@@ -769,6 +771,13 @@ void renderer_end_frame(Renderer *renderer) {
         renderer->screen_w * sizeof(uint32_t)
     );
     SDL_RenderClear(renderer->sdl_renderer);
-    SDL_RenderCopy(renderer->sdl_renderer, renderer->framebuffer_tex, NULL, NULL);
+
+    /* Compute pixel-perfect centered viewport rect */
+    int vx, vy, vw, vh;
+    platform_get_viewport_rect(renderer->platform, renderer->screen_w, renderer->screen_h,
+                               &vx, &vy, &vw, &vh);
+    SDL_Rect dest = { vx, vy, vw, vh };
+    SDL_RenderCopy(renderer->sdl_renderer, renderer->framebuffer_tex, NULL, &dest);
+
     SDL_RenderPresent(renderer->sdl_renderer);
 }

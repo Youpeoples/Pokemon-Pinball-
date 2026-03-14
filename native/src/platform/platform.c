@@ -12,6 +12,8 @@ struct Platform {
     int scale;
     uint8_t joypad_state;  /* Current button state mapped from keyboard */
     bool f1_pressed;       /* Edge-detected F1 toggle for debug overlay */
+    bool fullscreen_toggle; /* Edge-detected F11 toggle for fullscreen */
+    bool fullscreen;       /* Current fullscreen state */
     bool mouse_clicked;    /* Left mouse button was clicked */
     int mouse_gbc_x;       /* Click position in GBC logical coords */
     int mouse_gbc_y;
@@ -52,7 +54,7 @@ Platform *platform_init(int screen_w, int screen_h, int scale) {
         "Pokemon Pinball",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         screen_w * scale, screen_h * scale,
-        SDL_WINDOW_SHOWN
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     if (!p->window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -111,9 +113,27 @@ bool platform_poll_events(Platform *p) {
             event.key.keysym.scancode == SDL_SCANCODE_F1) {
             p->f1_pressed = true;
         }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+            event.key.keysym.scancode == SDL_SCANCODE_F11) {
+            p->fullscreen_toggle = true;
+        }
         if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
-            p->mouse_gbc_x = event.button.x / p->scale;
-            p->mouse_gbc_y = event.button.y / p->scale;
+            /* Translate click position using viewport rect for correct coords
+             * in fullscreen/resized window modes */
+            int vx, vy, vw, vh;
+            platform_get_viewport_rect(p, p->screen_w, p->screen_h, &vx, &vy, &vw, &vh);
+            if (vw > 0 && vh > 0) {
+                p->mouse_gbc_x = (event.button.x - vx) * p->screen_w / vw;
+                p->mouse_gbc_y = (event.button.y - vy) * p->screen_h / vh;
+                /* Clamp to valid range */
+                if (p->mouse_gbc_x < 0) p->mouse_gbc_x = 0;
+                if (p->mouse_gbc_x >= p->screen_w) p->mouse_gbc_x = p->screen_w - 1;
+                if (p->mouse_gbc_y < 0) p->mouse_gbc_y = 0;
+                if (p->mouse_gbc_y >= p->screen_h) p->mouse_gbc_y = p->screen_h - 1;
+            } else {
+                p->mouse_gbc_x = event.button.x / p->scale;
+                p->mouse_gbc_y = event.button.y / p->scale;
+            }
             p->mouse_clicked = true;
         }
     }
@@ -185,4 +205,37 @@ bool platform_consume_mouse_click(Platform *p, int *out_x, int *out_y) {
     if (out_x) *out_x = p->mouse_gbc_x;
     if (out_y) *out_y = p->mouse_gbc_y;
     return true;
+}
+
+bool platform_consume_fullscreen_toggle(Platform *p) {
+    bool was = p->fullscreen_toggle;
+    p->fullscreen_toggle = false;
+    return was;
+}
+
+void platform_toggle_fullscreen(Platform *p) {
+    p->fullscreen = !p->fullscreen;
+    SDL_SetWindowFullscreen(p->window,
+        p->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+}
+
+void platform_get_viewport_rect(Platform *p, int logical_w, int logical_h,
+                                int *out_x, int *out_y, int *out_w, int *out_h) {
+    int win_w, win_h;
+    SDL_GetRendererOutputSize(p->renderer, &win_w, &win_h);
+
+    /* Integer pixel-perfect scale */
+    int scale_x = win_w / logical_w;
+    int scale_y = win_h / logical_h;
+    int s = (scale_x < scale_y) ? scale_x : scale_y;
+    if (s < 1) s = 1;
+
+    int dest_w = logical_w * s;
+    int dest_h = logical_h * s;
+
+    /* Center in the window */
+    *out_x = (win_w - dest_w) / 2;
+    *out_y = (win_h - dest_h) / 2;
+    *out_w = dest_w;
+    *out_h = dest_h;
 }

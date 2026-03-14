@@ -266,16 +266,22 @@ void config_apply_audio_volume(const ConfigData *config, struct AudioEngine *aud
 
 /* Audio playback wrapper macros — check config first, fall back to hardcoded.
  * If the config entry has a custom audio file (clip_index >= 0), play that
- * instead of the GBC bytecode track. */
+ * instead of the GBC bytecode track.
+ * If a Lua table has custom stage music loaded (via manifest.json "music"),
+ * that takes priority over config and bytecode for "red_field"/"blue_field". */
+struct GameState;
+bool script_try_play_stage_music(struct GameState *state, const char *name);
 #define PLAY_MUSIC(state, name, fallback_bank, fallback_id) do { \
-    uint8_t _b, _i; int _ci = -1; \
-    if ((state)->config && config_get_music((state)->config, name, &_b, &_i, &_ci)) { \
-        if (_ci >= 0) \
-            audio_play_custom_music((state)->audio, _ci); \
-        else \
-            audio_play_music((state)->audio, _b, _i); \
-    } else \
-        audio_play_music((state)->audio, fallback_bank, fallback_id); \
+    if (!script_try_play_stage_music((state), name)) { \
+        uint8_t _b, _i; int _ci = -1; \
+        if ((state)->config && config_get_music((state)->config, name, &_b, &_i, &_ci)) { \
+            if (_ci >= 0) \
+                audio_play_custom_music((state)->audio, _ci); \
+            else \
+                audio_play_music((state)->audio, _b, _i); \
+        } else \
+            audio_play_music((state)->audio, fallback_bank, fallback_id); \
+    } \
 } while(0)
 
 #define PLAY_SFX(state, name, fallback_bank, fallback_id) do { \

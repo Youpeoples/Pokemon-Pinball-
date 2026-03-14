@@ -489,7 +489,6 @@ static void init_ball_blue_field_normal(GameState *state) {
 
     get_bcd_for_next_bonus_multiplier_blue(state);
 
-    /* Restart blue field music */
     PLAY_MUSIC(state, "blue_field", 0x10, 0x01);
 }
 

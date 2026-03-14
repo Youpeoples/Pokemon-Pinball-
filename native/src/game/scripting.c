@@ -392,6 +392,29 @@ bool script_load_table_for_stage(ScriptEngine *engine, uint8_t stage_id) {
 }
 
 /*=============================================================================
+ * Table Music Helper
+ *===========================================================================*/
+
+bool script_try_play_stage_music(GameState *state, const char *name) {
+    if (!state || !state->script_engine) return false;
+    ScriptEngine *e = state->script_engine;
+    if (!e->table_loaded) return false;
+
+    /* Only intercept main field music names */
+    if (strcmp(name, "red_field") != 0 && strcmp(name, "blue_field") != 0)
+        return false;
+
+    /* Look for a "stage" music entry in the loaded table */
+    for (int i = 0; i < e->num_table_music; i++) {
+        if (strcmp(e->table_music[i].key, "stage") == 0) {
+            audio_play_custom_music(state->audio, e->table_music[i].clip_index);
+            return true;
+        }
+    }
+    return false;
+}
+
+/*=============================================================================
  * Hook Queries
  *===========================================================================*/
 
