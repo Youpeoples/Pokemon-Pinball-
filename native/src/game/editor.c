@@ -6,7 +6,9 @@
  */
 
 #include "game/editor.h"
+#include "game/editor_mask.h"
 #include "game/game_state.h"
+#include "platform/platform.h"
 #include "game/editor_render.h"
 #include "game/editor_serialize.h"
 #include "game/scripting.h"
@@ -141,11 +143,15 @@ EditorState *editor_create(void) {
     editor->undo_stack = calloc(MAX_EDITOR_UNDO, sizeof(EditorTable));
     editor->undo_count = 0;
 
+    /* Mask editor */
+    editor->mask_editor = mask_editor_create();
+
     return editor;
 }
 
 void editor_free(EditorState *editor) {
     if (!editor) return;
+    mask_editor_free(editor->mask_editor);
     free(editor->saved_game_state);
     free(editor->framebuffer);
     free(editor->undo_stack);
@@ -256,6 +262,24 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
 
     PickerEntry *entry = &editor->picker_tables[picker_index];
 
+    /* Close mask editor and reset all transient state from previous table */
+    if (editor->mask_editor && editor->mask_editor->active) {
+        editor->mask_editor->active = false;  /* Discard without applying to old table */
+    }
+    editor->selected_object = -1;
+    editor->selected_coll_col = -1;
+    editor->hovered_coll_col = -1;
+    editor->dragging_object = false;
+    editor->dragging_coll_tile = false;
+    editor->fill_active = false;
+    editor->show_checklist = false;
+    editor->current_tool = TOOL_SELECT;
+    editor->palette_selection = COMP_NONE;
+    editor->undo_count = 0;
+    editor->undo_pushed_this_stroke = false;
+    editor->has_custom_tiles_top = false;
+    editor->has_custom_tiles_bottom = false;
+
     /* Initialize the editor table with info from the picker entry */
     memset(&editor->table, 0, sizeof(EditorTable));
     strncpy(editor->table.name, entry->name, sizeof(editor->table.name) - 1);
@@ -341,13 +365,13 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
                 }
             }
             /* Import top collision (0x300 bytes = 24 rows x 32 cols).
-             * The GBC collision map has 3 rows of padding above the visible tilemap area.
-             * Collision source row 3 aligns with tilemap row 0. Shift by -3 during import
+             * The GBC collision map has 2 rows of solid padding above the visible area.
+             * Collision source row 2 aligns with tilemap row 0. Shift by -2 during import
              * so collision_map[R][C] visually aligns with tilemap[R][C] in the editor. */
             for (int i = 0; i < 0x300; i++) {
                 int coll_row = i / 32;
                 int col = i % 32;
-                int dest_row = coll_row - 3;
+                int dest_row = coll_row - 2;
                 if (dest_row >= 0 && dest_row < 32) {
                     editor->table.collision_map[dest_row][col] = state->stage_collision_map[i];
                 }
@@ -372,11 +396,11 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
                     editor->table.tilemap_attrs[row + 32][col] = state->vram->bg_map[1][idx];
                 }
             }
-            /* Import bottom collision into rows 32+ (same 3-row offset as top) */
+            /* Import bottom collision into rows 32+ (same 2-row offset as top) */
             for (int i = 0; i < 0x300; i++) {
                 int coll_row = i / 32;
                 int col = i % 32;
-                int dest_row = coll_row - 3;
+                int dest_row = coll_row - 2;
                 if (dest_row >= 0 && dest_row < 32) {
                     editor->table.collision_map[dest_row + 32][col] = state->stage_collision_map[i];
                 }
@@ -517,12 +541,24 @@ void editor_toggle(GameState *state, Platform *platform) {
         editor_exit(editor, state);
         state->editor_mode = 0;
         platform_set_esc_quits(platform, true);
+        /* Restore windowed mode if we forced fullscreen on enter */
+        if (editor->forced_fullscreen && platform_is_fullscreen(platform)) {
+            platform_toggle_fullscreen(platform);
+            editor->forced_fullscreen = false;
+        }
     } else {
         /* Enter editor from any screen — table picker will be shown */
         editor_enter(editor, state);
         state->editor_mode = 1;
         /* Prevent ESC from quitting while editor is open */
         platform_set_esc_quits(platform, false);
+        /* Force fullscreen for editor workspace */
+        if (!platform_is_fullscreen(platform)) {
+            platform_toggle_fullscreen(platform);
+            editor->forced_fullscreen = true;
+        } else {
+            editor->forced_fullscreen = false;
+        }
     }
 }
 
@@ -552,14 +588,14 @@ void editor_import_current_stage(EditorState *editor, GameState *state) {
         editor_import_tilemap(editor, state->vram);
     }
 
-    /* Copy collision map with 3-row alignment offset.
-     * GBC collision rows 0-2 are above-screen border padding;
-     * collision row 3 aligns with tilemap row 0. */
+    /* Copy collision map with 2-row alignment offset.
+     * GBC collision rows 0-1 are above-screen border padding;
+     * collision row 2 aligns with tilemap row 0. */
     memset(t->collision_map, 0, sizeof(t->collision_map));
     for (int i = 0; i < (int)sizeof(state->stage_collision_map); i++) {
         int coll_row = i / 32;
         int col = i % 32;
-        int dest_row = coll_row - 3;
+        int dest_row = coll_row - 2;
         if (dest_row >= 0 && dest_row < 64) {
             t->collision_map[dest_row][col] = state->stage_collision_map[i];
         }
@@ -587,10 +623,10 @@ void editor_load_custom_data(EditorState *editor) {
         size_t n = fread(buf, 1, sizeof(buf), f);
         fclose(f);
         if (n >= 1024) {
-            /* Reverse the +3 offset: disk row 3 → display row 0 */
-            for (int r = 0; r < 18; r++) {
+            /* Reverse the +2 offset: disk row 2 → display row 0 */
+            for (int r = 0; r < 22; r++) {
                 for (int c = 0; c < 32; c++) {
-                    editor->table.collision_map[r][c] = buf[(r + 3) * 32 + c];
+                    editor->table.collision_map[r][c] = buf[(r + 2) * 32 + c];
                 }
             }
             printf("[EDITOR] Loaded custom collision: top (%zu bytes)\n", n);
@@ -604,10 +640,10 @@ void editor_load_custom_data(EditorState *editor) {
         size_t n = fread(buf, 1, sizeof(buf), f);
         fclose(f);
         if (n >= 1024) {
-            for (int r = 0; r < 18; r++) {
+            for (int r = 0; r < 22; r++) {
                 int data_row = r + 32;  /* Bottom half starts at data row 32 */
                 for (int c = 0; c < 32; c++) {
-                    editor->table.collision_map[data_row][c] = buf[(r + 3) * 32 + c];
+                    editor->table.collision_map[data_row][c] = buf[(r + 2) * 32 + c];
                 }
             }
             printf("[EDITOR] Loaded custom collision: bottom (%zu bytes)\n", n);
@@ -1175,7 +1211,37 @@ static bool editor_update_picker(EditorState *editor, Platform *platform) {
  * Editor Update - Main Editor Screen
  *===========================================================================*/
 
-static void editor_update_editor(EditorState *editor, Platform *platform) {
+static void editor_update_editor(EditorState *editor, Platform *platform, GameState *state) {
+    /* If mask editor panel is open, it consumes all input */
+    if (editor->mask_editor && editor->mask_editor->active) {
+        int me_win_w = 640, me_win_h = 576;
+        SDL_Window *me_win = SDL_GetMouseFocus();
+        if (me_win) SDL_GetWindowSize(me_win, &me_win_w, &me_win_h);
+        if (mask_editor_handle_input(editor->mask_editor, editor,
+                editor->mouse_x, editor->mouse_y,
+                editor->mouse_left_clicked, editor->mouse_right_clicked,
+                editor->mouse_left_down, editor->mouse_right_down,
+                me_win_w, me_win_h)) {
+            /* ESC is handled in main.c before editor_update runs */
+            /* Ctrl+Z for mask undo */
+            const Uint8 *keys = SDL_GetKeyboardState(NULL);
+            static Uint8 prev_z = 0;
+            if (keys[SDL_SCANCODE_Z] && !prev_z &&
+                (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL])) {
+                mask_editor_undo(editor->mask_editor);
+            }
+            /* Ctrl+Y for mask redo */
+            static Uint8 prev_y = 0;
+            if (keys[SDL_SCANCODE_Y] && !prev_y &&
+                (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL])) {
+                mask_editor_redo(editor->mask_editor);
+            }
+            prev_z = keys[SDL_SCANCODE_Z];
+            prev_y = keys[SDL_SCANCODE_Y];
+            return;
+        }
+    }
+
     /* Middle-click pan */
     int raw_mx = editor->mouse_x;
     int raw_my = editor->mouse_y;
@@ -1256,6 +1322,27 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         editor->current_tool = TOOL_PALETTE;
         editor->palette_selection = COMP_NONE;
     }
+    if (KEY_PRESSED(SDL_SCANCODE_I)) {
+        editor->show_tile_inspector = !editor->show_tile_inspector;
+    }
+    /* Q toggles ball test point overlay (collision mode visual aid) */
+    if (KEY_PRESSED(SDL_SCANCODE_Q) && editor->mask_editor) {
+        editor->mask_editor->show_test_points = !editor->mask_editor->show_test_points;
+    }
+    /* F toggles flipper sweep visualizer (requires collision overlay) */
+    if (KEY_PRESSED(SDL_SCANCODE_F)) {
+        editor->show_flipper_sweep = !editor->show_flipper_sweep;
+    }
+    /* ` (grave) cycles left panel tab */
+    if (KEY_PRESSED(SDL_SCANCODE_GRAVE)) {
+        editor->left_panel_tab = (editor->left_panel_tab + 1) % 2;
+    }
+    /* M opens the mask pixel editor for the hovered collision attribute */
+    if (KEY_PRESSED(SDL_SCANCODE_M) && editor->mask_editor && state &&
+        editor->show_collision_overlay && editor->hovered_coll_col >= 0 &&
+        editor->hovered_coll_attr != 0) {
+        mask_editor_open(editor->mask_editor, state, editor->hovered_coll_attr);
+    }
 
     /* Tab toggles table readiness checklist (not in palette mode where Tab cycles scope) */
     if (KEY_PRESSED(SDL_SCANCODE_TAB) && editor->current_tool != TOOL_PALETTE) {
@@ -1332,6 +1419,14 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         const char *save_path = editor->table.source_folder[0]
             ? editor->table.source_folder : "tables/_editor_output";
         editor_serialize_table(editor, save_path);
+
+        /* Export modified collision masks to atlas PNG + Lua snippet */
+        if (editor->mask_editor &&
+            (editor->mask_editor->any_modified || editor->mask_editor->any_flipper_modified)) {
+            mask_editor_export_atlas(editor->mask_editor, state);
+            mask_editor_export_lua_snippet(editor->mask_editor, save_path);
+        }
+
         editor->save_flash_timer = 120;  /* ~2 seconds at 60fps */
         editor->table.dirty = false;
     }
@@ -1357,6 +1452,15 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
 
     memcpy(prev_keys, keys, SDL_NUM_SCANCODES);
     #undef KEY_PRESSED
+
+    /* Flipper sweep animation tick */
+    if (editor->show_flipper_sweep) {
+        editor->flipper_anim_timer++;
+        if (editor->flipper_anim_timer >= 4) {
+            editor->flipper_anim_timer = 0;
+            editor->flipper_anim_angle = (editor->flipper_anim_angle + 1) % 16;
+        }
+    }
 
     /* Palette editor: arrow keys adjust channel value and cycle channels */
     if (editor->current_tool == TOOL_PALETTE) {
@@ -1766,6 +1870,21 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
 void editor_update(EditorState *editor, Platform *platform, GameState *state) {
     if (!editor || !editor->active) return;
 
+    /* Store GameState reference for render pass */
+    editor->game_state_ref = state;
+
+    /* Sync editor stage context to mask editor.
+     * In combined view, use top_stage_id for rows 0-17, bottom_stage_id for 18+.
+     * This ensures the correct mask PNG is loaded for each half. */
+    if (editor->mask_editor) {
+        if (editor->combined_view && editor->hovered_coll_row >= 0 &&
+            editor->hovered_coll_row < 18) {
+            editor->mask_editor->editor_stage_id = editor->top_stage_id;
+        } else {
+            editor->mask_editor->editor_stage_id = editor->table.stage_id;
+        }
+    }
+
     /* Poll SDL mouse state directly */
     int raw_mx, raw_my;
     uint32_t buttons = SDL_GetMouseState(&raw_mx, &raw_my);
@@ -1800,7 +1919,7 @@ void editor_update(EditorState *editor, Platform *platform, GameState *state) {
             break;
         }
         case EDITOR_SCREEN_EDITOR:
-            editor_update_editor(editor, platform);
+            editor_update_editor(editor, platform, state);
             break;
     }
 }

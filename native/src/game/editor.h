@@ -24,6 +24,7 @@ typedef struct GameState GameState;
 typedef struct Platform Platform;
 typedef struct Renderer Renderer;
 typedef struct VirtualVRAM VirtualVRAM;
+typedef struct MaskEditorState MaskEditorState;
 
 /*=============================================================================
  * Editor Constants
@@ -175,6 +176,7 @@ typedef struct EditorState {
     /* Overlays */
     bool show_collision_overlay;
     bool show_object_bounds;
+    bool show_tile_inspector;
 
     /* Current tool */
     EditorTool current_tool;
@@ -295,6 +297,23 @@ typedef struct EditorState {
 
     /* Editor active flag */
     bool active;
+
+    /* True if we forced fullscreen on editor entry (restore on exit) */
+    bool forced_fullscreen;
+
+    /* Collision mask editor */
+    MaskEditorState *mask_editor;
+
+    /* Flipper sweep visualizer */
+    bool show_flipper_sweep;
+    int flipper_anim_angle;        /* 0-15, cycles for animation */
+    int flipper_anim_timer;        /* Frame counter for animation */
+
+    /* Left panel tab (0 = Tools, 1 = Overlays & Controls) */
+    int left_panel_tab;
+
+    /* GameState reference (set during editor_update, valid during render) */
+    GameState *game_state_ref;
 } EditorState;
 
 /*=============================================================================

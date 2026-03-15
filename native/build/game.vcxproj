@@ -651,6 +651,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_blue_field.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_mask.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_serialize.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c" />
@@ -713,6 +714,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lvm.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lzio.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_impl.c" />
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_write_impl.c" />
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_vorbis.c" />
     <ResourceCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game.rc" />
   </ItemGroup>

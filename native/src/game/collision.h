@@ -2,6 +2,8 @@
 #define COLLISION_H
 
 #include "game_state.h"
+#include <stdbool.h>
+#include <stddef.h>
 
 /*
  * Tile-based collision detection for the pinball engine.
@@ -41,5 +43,26 @@ void load_bottom_collision_masks(GameState *state);
 void collision_set_mask_override(const char *path);
 void collision_set_map_override(const char *path);
 void collision_clear_overrides(void);
+
+/*
+ * Get the currently loaded collision mask data and size.
+ * Used by the editor's mask preview system for read access.
+ * Returns NULL if no masks are loaded.
+ */
+const uint8_t *collision_get_masks(size_t *out_size);
+
+/*
+ * Get the currently loaded bottom flipper mask data.
+ * is_right: false=left flipper masks, true=right flipper masks.
+ * Returns NULL if not loaded.
+ */
+const uint8_t *collision_get_flipper_masks(bool is_right, size_t *out_size);
+
+/*
+ * Apply custom mask data from the editor.
+ * Copies the provided mask data over the currently loaded masks at the given
+ * attribute offset. Used when the mask editor modifies masks in real-time.
+ */
+void collision_apply_custom_mask(uint8_t attr, const uint8_t *mask_data, int mask_bytes);
 
 #endif /* COLLISION_H */

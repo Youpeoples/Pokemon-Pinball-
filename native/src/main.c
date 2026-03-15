@@ -23,6 +23,7 @@
 #include "game/joypad.h"
 #include "game/save.h"
 #include "game/editor.h"
+#include "game/editor_mask.h"
 #include <string.h>
 
 /* GBC runs at ~59.7275 Hz */
@@ -218,7 +219,12 @@ int main(int argc, char *argv[]) {
 
         /* ESC handling for editor modes */
         if (platform_consume_esc(platform)) {
-            if (state->editor_state && state->editor_state->playtesting) {
+            if (state->editor_mode && state->editor_state &&
+                state->editor_state->mask_editor &&
+                state->editor_state->mask_editor->active) {
+                /* Mask editor is open: close it, don't propagate */
+                mask_editor_close(state->editor_state->mask_editor);
+            } else if (state->editor_state && state->editor_state->playtesting) {
                 /* During playtest: return to editor */
                 editor_stop_playtest(state->editor_state, state);
                 platform_set_esc_quits(platform, false);

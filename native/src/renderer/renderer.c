@@ -789,6 +789,7 @@ void renderer_end_frame(Renderer *renderer) {
         renderer->framebuffer,
         renderer->screen_w * sizeof(uint32_t)
     );
+    SDL_SetRenderDrawColor(renderer->sdl_renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer->sdl_renderer);
 
     /* Compute pixel-perfect centered viewport rect */

@@ -17,6 +17,7 @@ C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\diglett_bonus.
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_blue_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_blue_field.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\draw_red_field.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\draw_red_field.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_mask.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor_mask.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor_render.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_serialize.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\editor_serialize.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\flippers.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\flippers.obj
@@ -79,4 +80,5 @@ C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lut
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lvm.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\lvm.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\lua\lzio.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\lzio.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_impl.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stb_image_impl.obj
+C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_write_impl.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stb_image_write_impl.obj
 C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_vorbis.c;C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\build\game.dir\Debug\stb_vorbis.obj

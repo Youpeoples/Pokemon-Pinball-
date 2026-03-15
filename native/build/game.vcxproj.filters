@@ -58,6 +58,9 @@
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_mask.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\game\editor_render.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -242,6 +245,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_impl.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_image_write_impl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="C:\Users\ville\Documents\GitHub\Pokemon Pinball +\native\src\third_party\stb_vorbis.c">

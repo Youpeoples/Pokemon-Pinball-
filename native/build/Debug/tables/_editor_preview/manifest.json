@@ -1,10 +1,10 @@
 {
-    "name": "Red Field",
+    "name": "Blue Field",
     "type": "main_field",
     "description": "Custom table created with Stage Builder",
     "stages": {
-        "top":    { "id": 0, "has_flippers": false },
-        "bottom": { "id": 1, "has_flippers": true }
+        "top":    { "id": 4, "has_flippers": false },
+        "bottom": { "id": 5, "has_flippers": true }
     },
     "scripts": {
         "main": "scripts/main.lua",

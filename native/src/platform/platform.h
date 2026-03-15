@@ -73,6 +73,9 @@ void platform_set_esc_quits(Platform *platform, bool quits);
 /* Toggle between windowed and borderless fullscreen */
 void platform_toggle_fullscreen(Platform *platform);
 
+/* Query current fullscreen state */
+bool platform_is_fullscreen(Platform *platform);
+
 /* Compute the pixel-perfect viewport rect for the game framebuffer.
  * Returns the destination rectangle (x, y, w, h) centered in the window. */
 void platform_get_viewport_rect(Platform *platform, int logical_w, int logical_h,

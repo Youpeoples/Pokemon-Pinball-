@@ -392,8 +392,8 @@ static bool generate_template_script(const char *dir, const char *filename, cons
  * Serialize: Collision Maps (binary)
  *
  * Writes two 1024-byte .collision files (32 rows x 32 cols) per stage half.
- * On-disk format has +3 row offset: rows 0-2 are above-screen padding (0x01),
- * rows 3-20 are visible tilemap rows, rows 21-31 are padding (0x00).
+ * On-disk format has +2 row offset: rows 0-1 are above-screen padding (0x01),
+ * rows 2-19 are visible tilemap rows, rows 20-31 are padding (0x00).
  *===========================================================================*/
 
 bool editor_serialize_collision(EditorState *editor, const char *output_path) {
@@ -406,20 +406,19 @@ bool editor_serialize_collision(EditorState *editor, const char *output_path) {
     uint8_t buf[1024];  /* 32 rows x 32 cols */
     bool ok = true;
 
-    /* Top half: editor display rows 0-17 → disk rows 3-20 */
+    /* Top half: editor display rows 0-21 → disk rows 2-23 */
     memset(buf, 0, sizeof(buf));
-    /* Rows 0-2: above-screen solid padding */
+    /* Rows 0-1: above-screen solid padding */
     for (int c = 0; c < 32; c++) {
         buf[0 * 32 + c] = 0x01;
         buf[1 * 32 + c] = 0x01;
-        buf[2 * 32 + c] = 0x01;
     }
-    /* Rows 3-20: visible area from editor */
-    for (int r = 0; r < 18; r++) {
+    /* Rows 2-23: visible area from editor */
+    for (int r = 0; r < 22; r++) {
         int data_row = editor_display_to_data_row(editor, r);
         if (data_row >= 0 && data_row < 64) {
             for (int c = 0; c < 32; c++) {
-                buf[(r + 3) * 32 + c] = editor->table.collision_map[data_row][c];
+                buf[(r + 2) * 32 + c] = editor->table.collision_map[data_row][c];
             }
         }
     }
@@ -427,19 +426,18 @@ bool editor_serialize_collision(EditorState *editor, const char *output_path) {
     snprintf(path, sizeof(path), "%s/data/top.collision", output_path);
     ok = ok && write_binary_file(path, buf, sizeof(buf));
 
-    /* Bottom half: editor display rows 18-35 → disk rows 3-20 */
+    /* Bottom half: editor display rows 18-39 → disk rows 2-23 */
     memset(buf, 0, sizeof(buf));
     for (int c = 0; c < 32; c++) {
         buf[0 * 32 + c] = 0x01;
         buf[1 * 32 + c] = 0x01;
-        buf[2 * 32 + c] = 0x01;
     }
-    for (int r = 0; r < 18; r++) {
+    for (int r = 0; r < 22; r++) {
         int display_row = r + 18;  /* Bottom half display rows */
         int data_row = editor_display_to_data_row(editor, display_row);
         if (data_row >= 0 && data_row < 64) {
             for (int c = 0; c < 32; c++) {
-                buf[(r + 3) * 32 + c] = editor->table.collision_map[data_row][c];
+                buf[(r + 2) * 32 + c] = editor->table.collision_map[data_row][c];
             }
         }
     }

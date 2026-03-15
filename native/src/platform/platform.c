@@ -244,6 +244,10 @@ void platform_toggle_fullscreen(Platform *p) {
         p->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
 
+bool platform_is_fullscreen(Platform *p) {
+    return p->fullscreen;
+}
+
 bool platform_consume_f5_toggle(Platform *p) {
     bool was = p->f5_pressed;
     p->f5_pressed = false;

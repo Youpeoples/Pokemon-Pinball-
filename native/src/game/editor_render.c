@@ -10,7 +10,9 @@
 
 #include "game/editor_render.h"
 #include "game/editor.h"
+#include "game/editor_mask.h"
 #include "game/game_state.h"
+#include "game/config_data.h"
 #include "renderer/renderer.h"
 #include "renderer/vram.h"
 #include "game/constants.h"
@@ -610,6 +612,199 @@ static void render_collision_overlay(EditorState *editor, SDL_Renderer *sdl_r) {
 }
 
 /*=============================================================================
+ * Render: Flipper Sweep Visualizer
+ *
+ * When toggled with F key, shows flipper physics data on the viewport:
+ * - Collision detection rectangle around flipper area
+ * - Pivot point crosshairs for left and right flippers
+ * - Animated angle-set coloring on flipper tiles (red/yellow/green)
+ * - Mask geometry preview cycling through all 16 angles
+ * - Current angle indicator text
+ *===========================================================================*/
+
+/* Colors for the 3 flipper angle sets */
+#define COL_FLIP_SET0  0xFF4040A0   /* Red: angles 0-6 */
+#define COL_FLIP_SET1  0xFFFF40A0   /* Yellow: angles 7-13 */
+#define COL_FLIP_SET2  0x40FF40A0   /* Green: angles 14+ */
+#define COL_FLIP_RECT  0x00FFFFA0   /* Cyan: collision detection rect */
+#define COL_FLIP_PIVOT 0xFF80FFFF   /* Pink: pivot crosshairs */
+
+static void render_flipper_sweep(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (!editor->show_flipper_sweep) return;
+    if (!editor->show_collision_overlay) return;
+    if (!editor->table.has_flippers) return;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    int s = editor->ui_scale;
+    int angle = editor->flipper_anim_angle;
+    int angle_set = (angle <= 6) ? 0 : (angle <= 13) ? 1 : 2;
+    uint32_t set_color = (angle_set == 0) ? COL_FLIP_SET0 :
+                         (angle_set == 1) ? COL_FLIP_SET1 : COL_FLIP_SET2;
+
+    /* Get flipper collision bounds from config or defaults */
+    int x_min = 43, x_range = 48, y_min = 123, y_range = 32;
+    if (editor->game_state_ref && editor->game_state_ref->config) {
+        PhysicsConfig *phys = &editor->game_state_ref->config->physics;
+        x_min = phys->flipper_collision_x_min;
+        x_range = phys->flipper_collision_x_range;
+        y_min = phys->flipper_collision_y_min;
+        y_range = phys->flipper_collision_y_range;
+    }
+
+    /* Flipper pivot points in world coordinates (bottom stage) */
+    int left_pivot_x = 56, left_pivot_y = 123;
+    int right_pivot_x = 104, right_pivot_y = 123;
+
+    /* Y offset for combined view: bottom stage starts at display row 18 */
+    int bottom_y_offset = 0;
+    if (editor->combined_view && editor->hide_buffer_rows) {
+        bottom_y_offset = 18 * 8;  /* 144 pixels */
+    } else if (editor->combined_view) {
+        bottom_y_offset = 32 * 8;  /* Full buffer rows included */
+    }
+
+    /* --- A) Collision Detection Rectangle --- */
+    {
+        int rect_x = x_min;
+        int rect_y = y_min + bottom_y_offset;
+        int rect_w = x_range;
+        int rect_h = y_range;
+
+        int sx = world_to_screen_x(editor, (float)rect_x);
+        int sy = world_to_screen_y(editor, (float)rect_y);
+        int sw = (int)((float)rect_w * editor->zoom);
+        int sh = (int)((float)rect_h * editor->zoom);
+
+        /* Left flipper detection zone */
+        fill_rect(sdl_r, sx, sy, sw, sh, 0x00FFFF20);
+        draw_rect_outline(sdl_r, sx, sy, sw, sh, COL_FLIP_RECT);
+        draw_rect_outline(sdl_r, sx + 1, sy + 1, sw - 2, sh - 2, COL_FLIP_RECT);
+
+        /* Right flipper detection zone (mirrored: 160 - x_min - x_range to 160 - x_min) */
+        int right_x = 160 - x_min - x_range;
+        sx = world_to_screen_x(editor, (float)right_x);
+        fill_rect(sdl_r, sx, sy, sw, sh, 0x00FFFF20);
+        draw_rect_outline(sdl_r, sx, sy, sw, sh, COL_FLIP_RECT);
+        draw_rect_outline(sdl_r, sx + 1, sy + 1, sw - 2, sh - 2, COL_FLIP_RECT);
+
+        /* Labels */
+        if (sw > 30) {
+            draw_text_s(sdl_r, sx + 2, sy + 2, "R", COL_FLIP_RECT, 1);
+            int lsx = world_to_screen_x(editor, (float)x_min);
+            draw_text_s(sdl_r, lsx + 2, sy + 2, "L", COL_FLIP_RECT, 1);
+        }
+    }
+
+    /* --- B) Pivot Point Crosshairs --- */
+    {
+        int pivots[2][2] = {
+            { left_pivot_x, left_pivot_y + bottom_y_offset },
+            { right_pivot_x, right_pivot_y + bottom_y_offset }
+        };
+        int cross_len = (int)(4.0f * editor->zoom);
+        if (cross_len < 3) cross_len = 3;
+
+        for (int i = 0; i < 2; i++) {
+            int cx = world_to_screen_x(editor, (float)pivots[i][0]);
+            int cy = world_to_screen_y(editor, (float)pivots[i][1]);
+
+            /* Crosshair */
+            draw_line(sdl_r, cx - cross_len, cy, cx + cross_len, cy, COL_FLIP_PIVOT);
+            draw_line(sdl_r, cx, cy - cross_len, cx, cy + cross_len, COL_FLIP_PIVOT);
+
+            /* Small filled center */
+            fill_rect(sdl_r, cx - 1, cy - 1, 3, 3, COL_FLIP_PIVOT);
+        }
+    }
+
+    /* --- C) Angle-Colored Flipper Tiles + D) Animated Mask Preview --- */
+    {
+        int win_w, win_h;
+        SDL_GetRendererOutputSize(sdl_r, &win_w, &win_h);
+
+        int disp_rows = editor_display_rows(editor);
+        int total_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+        float tile_screen = 8.0f * editor->zoom;
+
+        /* Culling */
+        int start_col = (int)(editor->camera_x / 8.0f);
+        int start_row = (int)(editor->camera_y / 8.0f);
+        int end_col = start_col + (int)(win_w / tile_screen) + 2;
+        int end_row = start_row + (int)(win_h / tile_screen) + 2;
+        if (start_col < 0) start_col = 0;
+        if (start_row < 0) start_row = 0;
+        if (end_col > total_cols) end_col = total_cols;
+        if (end_row > disp_rows) end_row = disp_rows;
+
+        for (int row = start_row; row < end_row; row++) {
+            int data_row = editor_display_to_data_row(editor, row);
+            for (int col = start_col; col < end_col; col++) {
+                uint8_t attr = editor->table.collision_map[data_row][col];
+                if (attr < 0xE0) continue;  /* Only flipper tiles */
+
+                int sx = world_to_screen_x(editor, (float)(col * 8));
+                int sy = world_to_screen_y(editor, (float)(row * 8));
+                int size = (int)(8.0f * editor->zoom);
+                if (size < 1) size = 1;
+
+                /* Color band overlay based on current animation angle set */
+                fill_rect(sdl_r, sx, sy, size, size, set_color);
+
+                /* Mask geometry preview when zoomed in enough */
+                if (size >= 8 && editor->mask_editor && editor->game_state_ref) {
+                    uint8_t mask_index = (attr - 0xE0) & 0x0F;
+                    bool is_right = (attr >= 0xF0);
+                    uint8_t mask_data[MASK_BYTES];
+                    mask_editor_get_flipper_mask(editor->mask_editor,
+                        editor->game_state_ref, mask_index, is_right,
+                        angle_set, mask_data);
+
+                    /* Render mask pixels as solid black for contrast */
+                    float px_size = (float)size / 8.0f;
+                    uint32_t solid_color = 0x000000E0;
+                    for (int my = 0; my < 8; my++) {
+                        uint8_t row_bits = mask_data[my];
+                        for (int mx = 0; mx < 8; mx++) {
+                            if (row_bits & (0x80 >> mx)) {
+                                int px = sx + (int)(mx * px_size);
+                                int py = sy + (int)(my * px_size);
+                                int pw = (int)((mx + 1) * px_size) - (int)(mx * px_size);
+                                int ph = (int)((my + 1) * px_size) - (int)(my * px_size);
+                                if (pw < 1) pw = 1;
+                                if (ph < 1) ph = 1;
+                                fill_rect(sdl_r, px, py, pw, ph, solid_color);
+                            }
+                        }
+                    }
+                }
+
+                /* Outline */
+                draw_rect_outline(sdl_r, sx, sy, size, size, (set_color | 0xFF));
+            }
+        }
+    }
+
+    /* --- E) Angle Indicator Text --- */
+    {
+        const char *set_name = (angle_set == 0) ? "0-6" :
+                               (angle_set == 1) ? "7-13" : "14+";
+        char buf[40];
+        snprintf(buf, sizeof(buf), "Angle: %d/15 (Set %s)", angle, set_name);
+
+        /* Position near left flipper pivot */
+        int label_y = y_min + y_range + 4 + bottom_y_offset;
+        int lx = world_to_screen_x(editor, (float)x_min);
+        int ly = world_to_screen_y(editor, (float)label_y);
+
+        /* Background for readability */
+        int tw = text_width_s(buf, s);
+        fill_rect(sdl_r, lx - 2, ly - 1, tw + 4, 7 * s + 2, 0x000000C0);
+        draw_text_s(sdl_r, lx, ly, buf, set_color | 0xFF, s);
+    }
+}
+
+/*=============================================================================
  * Render: Palette Highlight Overlay
  *
  * When TOOL_PALETTE is active, highlights all tiles in the viewport that
@@ -719,11 +914,239 @@ static void render_viewport_indicators(EditorState *editor, SDL_Renderer *sdl_r)
 }
 
 /*=============================================================================
+ * Render: Mask Editor Active Tile Highlight
+ * When the mask pixel editor is open, dramatically highlight every tile
+ * on the viewport that uses the attribute currently being edited.
+ *===========================================================================*/
+
+static void render_mask_edit_highlight(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (!editor->mask_editor || !editor->mask_editor->active) return;
+    if (!editor->show_collision_overlay) return;
+
+    uint8_t target = editor->mask_editor->edit_attr;
+    if (target == 0) return;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    int win_w, win_h;
+    SDL_GetRendererOutputSize(sdl_r, &win_w, &win_h);
+
+    int disp_rows = editor_display_rows(editor);
+    int total_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+
+    /* Culling */
+    int start_col = (int)(editor->camera_x / 8.0f);
+    int start_row = (int)(editor->camera_y / 8.0f);
+    float tile_screen = 8.0f * editor->zoom;
+    int end_col = start_col + (int)(win_w / tile_screen) + 2;
+    int end_row = start_row + (int)(win_h / tile_screen) + 2;
+    if (start_col < 0) start_col = 0;
+    if (start_row < 0) start_row = 0;
+    if (end_col > total_cols) end_col = total_cols;
+    if (end_row > disp_rows) end_row = disp_rows;
+
+    /* Pulsing animation: cycle brightness over time */
+    static int pulse_timer = 0;
+    pulse_timer++;
+    /* Triangle wave: 0→255→0 over ~60 frames */
+    int phase = pulse_timer % 60;
+    int brightness = phase < 30 ? (phase * 255 / 30) : ((60 - phase) * 255 / 30);
+    uint8_t alpha = (uint8_t)(120 + brightness * 135 / 255);  /* range 120-255 */
+    uint8_t glow = (uint8_t)(80 + brightness * 175 / 255);    /* range 80-255 */
+
+    for (int row = start_row; row < end_row; row++) {
+        int data_row = editor_display_to_data_row(editor, row);
+        for (int col = start_col; col < end_col; col++) {
+            uint8_t coll = editor->table.collision_map[data_row][col];
+            if (coll != target) continue;
+
+            int sx = world_to_screen_x(editor, (float)(col * 8));
+            int sy = world_to_screen_y(editor, (float)(row * 8));
+            int size = (int)(8.0f * editor->zoom);
+            if (size < 1) size = 1;
+
+            /* Bright fill pulse */
+            uint32_t fill = ((uint32_t)glow << 24) | ((uint32_t)glow << 16) |
+                            (0x40 << 8) | (alpha / 2);
+            fill_rect(sdl_r, sx, sy, size, size, fill);
+
+            /* Thick bright outline */
+            uint32_t outline = (0xFF << 24) | ((uint32_t)glow << 16) |
+                               (0x00 << 8) | alpha;
+            draw_rect_outline(sdl_r, sx - 2, sy - 2, size + 4, size + 4, outline);
+            draw_rect_outline(sdl_r, sx - 1, sy - 1, size + 2, size + 2, outline);
+            draw_rect_outline(sdl_r, sx, sy, size, size, 0xFFFFFFFF);
+        }
+    }
+}
+
+/*=============================================================================
+ * Render: VRAM Tile Address Inspector (toggled with I key)
+ *===========================================================================*/
+
+static void render_tile_inspector(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
+    if (!editor->show_tile_inspector) return;
+    if (!editor->table.has_vram) return;
+    /* Hide when mask editor panel is open (modal) */
+    if (editor->mask_editor && editor->mask_editor->active) return;
+
+    int s = editor->ui_scale;
+
+    /* Compute hovered tile from mouse position */
+    float world_x = editor->camera_x + (float)editor->mouse_x / editor->zoom;
+    float world_y = editor->camera_y + (float)editor->mouse_y / editor->zoom;
+    int col = (int)(world_x / 8.0f);
+    int disp_row = (int)(world_y / 8.0f);
+    int disp_rows = editor_display_rows(editor);
+    int total_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+    if (col < 0 || col >= total_cols || disp_row < 0 || disp_row >= disp_rows) return;
+
+    int data_row = editor_display_to_data_row(editor, disp_row);
+
+    /* Look up tilemap data */
+    uint8_t tile_num = editor->table.tilemap[data_row][col];
+    uint8_t attr = editor->table.tilemap_attrs[data_row][col];
+    int pal_num = attr & 0x07;
+    int tile_bank = (attr >> 3) & 1;
+    bool x_flip = (attr >> 5) & 1;
+    bool y_flip = (attr >> 6) & 1;
+    int priority = (attr >> 7) & 1;
+
+    /* Compute VRAM address */
+    bool use_unsigned = editor->table.unsigned_addressing;
+    int tile_offset;
+    uint16_t vram_addr;
+    if (use_unsigned) {
+        tile_offset = (int)tile_num * 16;
+        vram_addr = 0x8000 + (uint16_t)tile_offset;
+    } else {
+        tile_offset = (int)(int8_t)tile_num * 16 + 0x1000;
+        vram_addr = 0x8000 + (uint16_t)tile_offset;
+    }
+
+    if (tile_offset < 0 || tile_offset + 16 > VRAM_TILE_DATA_SIZE) return;
+
+    /* Get tile data pointer */
+    const uint8_t *tile_data;
+    GBCPalette *pal_source;
+    if (editor->combined_view) {
+        if (data_row < 32) {
+            tile_data = &editor->vram_top[tile_bank][tile_offset];
+            pal_source = editor->palettes_top;
+        } else {
+            tile_data = &editor->vram_bottom[tile_bank][tile_offset];
+            pal_source = editor->palettes_bottom;
+        }
+    } else {
+        if (!editor->vram_ref) return;
+        tile_data = &editor->vram_ref->tile_data[tile_bank][tile_offset];
+        pal_source = editor->table.bg_palettes;
+    }
+
+    GBCPalette pal = pal_source[pal_num];
+
+    /* Format tooltip lines */
+    int row_h = 7 * s;
+    int pad = 4;
+
+    char line1[48], line2[48], line3[48], line4[48];
+    snprintf(line1, sizeof(line1), "Tile: 0x%02X (%d)", tile_num, tile_num);
+    snprintf(line2, sizeof(line2), "VRAM: $%04X  Bank: %d", vram_addr, tile_bank);
+
+    /* Build flip string */
+    char flip_str[8] = "-";
+    if (x_flip && y_flip) { flip_str[0] = 'H'; flip_str[1] = ' '; flip_str[2] = 'V'; flip_str[3] = '\0'; }
+    else if (x_flip) { flip_str[0] = 'H'; flip_str[1] = '\0'; }
+    else if (y_flip) { flip_str[0] = 'V'; flip_str[1] = '\0'; }
+    snprintf(line3, sizeof(line3), "Pal: %d  Flip: %s  Pri: %d", pal_num, flip_str, priority);
+    snprintf(line4, sizeof(line4), "Pos: (%d, %d)", col, disp_row);
+
+    /* Tile preview size */
+    int preview_scale = s * 2;
+    int preview_size = 8 * preview_scale;
+
+    /* Color swatch row: 4 swatches */
+    int swatch_w = 4 * s;
+    int swatch_h = 3 * s;
+    int swatch_row_h = swatch_h + row_h + pad;  /* swatch + hex label */
+
+    /* Compute panel size — generous fixed width so all text fits */
+    int content_w = 30 * (4 + 1) * s;  /* ~30 chars wide */
+    if (preview_size > content_w) content_w = preview_size;
+    int tooltip_w = content_w + pad * 2;
+    int tooltip_h = row_h * 4 + pad * 5 + preview_size + pad + swatch_row_h;
+
+    /* Fixed position: upper-right, just left of sidebar */
+    int sidebar_w = EDITOR_SIDEBAR_W;
+    int tx = win_w - sidebar_w - tooltip_w - 8;
+    int ty = 8;
+    if (tx < 0) tx = 0;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    /* Background */
+    fill_rect(sdl_r, tx, ty, tooltip_w, tooltip_h, 0x101010F0);
+    draw_rect_outline(sdl_r, tx, ty, tooltip_w, tooltip_h, 0x6090C0FF);
+
+    /* Text lines */
+    int text_x = tx + pad;
+    int text_y = ty + pad;
+    draw_text_s(sdl_r, text_x, text_y, line1, COL_TEXT_WHITE, s);
+    text_y += row_h + pad;
+    draw_text_s(sdl_r, text_x, text_y, line2, 0x80C0FFFF, s);
+    text_y += row_h + pad;
+    draw_text_s(sdl_r, text_x, text_y, line3, COL_TEXT_DIM, s);
+    text_y += row_h + pad;
+    draw_text_s(sdl_r, text_x, text_y, line4, COL_TEXT_DIM, s);
+    text_y += row_h + pad;
+
+    /* 8x8 tile preview with actual palette colors and flip */
+    int preview_x = tx + pad;
+    int preview_y = text_y;
+    for (int py = 0; py < 8; py++) {
+        int src_row_idx = y_flip ? (7 - py) : py;
+        uint8_t lo_byte = tile_data[src_row_idx * 2];
+        uint8_t hi_byte = tile_data[src_row_idx * 2 + 1];
+        for (int px = 0; px < 8; px++) {
+            int bit = x_flip ? px : (7 - px);
+            uint8_t color_idx = ((lo_byte >> bit) & 1) |
+                               (((hi_byte >> bit) & 1) << 1);
+            uint16_t c = pal.colors[color_idx];
+            uint32_t rgba = rgb555_to_rgba(c);
+            fill_rect(sdl_r, preview_x + px * preview_scale,
+                      preview_y + py * preview_scale,
+                      preview_scale, preview_scale, rgba);
+        }
+    }
+    /* Outline around preview */
+    draw_rect_outline(sdl_r, preview_x - 1, preview_y - 1,
+                      preview_size + 2, preview_size + 2, 0x606060FF);
+    text_y += preview_size + pad;
+
+    /* 4 palette color swatches with hex labels */
+    int sw_x = tx + pad;
+    int sw_y = text_y;
+    for (int ci = 0; ci < 4; ci++) {
+        uint16_t c = pal.colors[ci];
+        uint32_t rgba = rgb555_to_rgba(c);
+        fill_rect(sdl_r, sw_x, sw_y, swatch_w, swatch_h, rgba);
+        draw_rect_outline(sdl_r, sw_x, sw_y, swatch_w, swatch_h, 0x808080FF);
+        /* Hex label below swatch */
+        char hex[8];
+        snprintf(hex, sizeof(hex), "%04X", c);
+        draw_text_s(sdl_r, sw_x, sw_y + swatch_h + 2, hex, COL_TEXT_DIM, s > 2 ? s - 1 : s);
+        sw_x += swatch_w + pad;
+    }
+}
+
+/*=============================================================================
  * Render: Collision Tooltip (shown when hovering over collision tiles)
  *===========================================================================*/
 
 static void render_collision_tooltip(EditorState *editor, SDL_Renderer *sdl_r) {
     if (!editor->show_collision_overlay || editor->hovered_coll_col < 0) return;
+    /* Hide tooltip when mask editor panel is open */
+    if (editor->mask_editor && editor->mask_editor->active) return;
 
     int s = editor->ui_scale;
     uint8_t attr = editor->hovered_coll_attr;
@@ -736,6 +1159,10 @@ static void render_collision_tooltip(EditorState *editor, SDL_Renderer *sdl_r) {
     snprintf(line2, sizeof(line2), "Pos: (%d, %d)", editor->hovered_coll_col, editor->hovered_coll_row);
     snprintf(line3, sizeof(line3), "Type: %s", collision_attr_type_name(attr));
 
+    /* Mask preview size (8x scaled = 8*8 = 64px, but use s-based scale for consistency) */
+    int mask_preview_scale = s * 2;  /* Each mask pixel = 2*ui_scale screen pixels */
+    int mask_preview_size = 8 * mask_preview_scale;
+
     /* Compute tooltip size */
     int w1 = text_width_s(line1, s);
     int w2 = text_width_s(line2, s);
@@ -744,8 +1171,14 @@ static void render_collision_tooltip(EditorState *editor, SDL_Renderer *sdl_r) {
     if (w2 > max_w) max_w = w2;
     if (w3 > max_w) max_w = w3;
     int swatch_size = 3 * s;
-    int tooltip_w = max_w + swatch_size + pad * 4;
+
+    /* Tooltip width: text area + mask preview side by side */
+    int text_area_w = max_w + swatch_size + pad * 3;
+    int tooltip_w = text_area_w + mask_preview_size + pad * 2;
     int tooltip_h = row_h * 3 + pad * 3;
+    if (mask_preview_size + pad * 2 > tooltip_h) {
+        tooltip_h = mask_preview_size + pad * 2;
+    }
 
     /* Position near mouse cursor */
     int tx = editor->mouse_x + 16;
@@ -768,6 +1201,15 @@ static void render_collision_tooltip(EditorState *editor, SDL_Renderer *sdl_r) {
     /* Color swatch */
     uint32_t swatch_color = collision_attr_color(attr) | 0xFF; /* fully opaque */
     fill_rect(sdl_r, tx + pad, ty + pad, swatch_size, swatch_size, swatch_color);
+
+    /* Mask preview (rendered at right side of tooltip) */
+    if (editor->mask_editor && attr != 0 && editor->game_state_ref) {
+        int preview_x = tx + text_area_w + pad;
+        int preview_y = ty + (tooltip_h - mask_preview_size) / 2;
+        mask_editor_render_preview(editor->mask_editor, editor->game_state_ref,
+                                    sdl_r, preview_x, preview_y,
+                                    mask_preview_scale, attr);
+    }
 
     /* Text */
     int text_x = tx + pad + swatch_size + pad;
@@ -1290,6 +1732,416 @@ static void render_fill_preview(EditorState *editor, SDL_Renderer *sdl_r) {
 }
 
 /*=============================================================================
+ * Render: Left Info Panel — keyboard shortcuts & tool reference
+ *===========================================================================*/
+
+static void render_left_panel(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
+    int s = editor->ui_scale;
+    int line_h = 7 * s;           /* Line height */
+    int half_h = 4 * s;           /* Half-line gap */
+    int sec_gap = 4 * s;          /* Extra gap before section header */
+    int pad = 6 * s;              /* Panel inner padding */
+    int top_bar = 7 * s + 6;     /* Help bar height */
+    int bot_bar = 7 * s + 6;     /* Status bar height */
+
+    /* Panel width: fit ~30 chars */
+    int panel_w = 30 * (4 + 1) * s + pad * 2;
+    if (panel_w > win_w / 3) panel_w = win_w / 3;
+
+    int panel_x = 0;
+    int panel_y = top_bar;
+    int panel_h = win_h - top_bar - bot_bar;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    fill_rect(sdl_r, panel_x, panel_y, panel_w, panel_h, 0x181818D0);
+    fill_rect(sdl_r, panel_x + panel_w - 1, panel_y, 1, panel_h, 0x404040FF);
+
+    int x = panel_x + pad;
+    int y = panel_y + pad;
+    int max_y = panel_y + panel_h - pad;
+
+    #define LP_SEC(label) do { \
+        if (y + sec_gap + line_h > max_y) goto done; \
+        y += sec_gap; \
+        draw_text_s(sdl_r, x, y, label, 0x80C0FFFF, s); \
+        y += line_h; \
+        fill_rect(sdl_r, x, y - 2, panel_w - pad * 2, 1, 0x405060FF); \
+    } while(0)
+    #define LP(label) do { \
+        if (y + line_h > max_y) goto done; \
+        draw_text_s(sdl_r, x, y, label, 0xA0A0A0FF, s); \
+        y += line_h; \
+    } while(0)
+    #define LP_KEY(label) do { \
+        if (y + line_h > max_y) goto done; \
+        draw_text_s(sdl_r, x, y, label, 0xD0D0D0FF, s); \
+        y += line_h; \
+    } while(0)
+    #define LP_DIM(label) do { \
+        if (y + line_h > max_y) goto done; \
+        draw_text_s(sdl_r, x, y, label, 0x707070FF, s); \
+        y += line_h; \
+    } while(0)
+    #define LP_GAP() do { y += half_h; } while(0)
+
+    /* ============================================================
+     * MASK EDITOR ACTIVE: show dedicated mask editor help
+     * ============================================================ */
+    if (editor->mask_editor && editor->mask_editor->active) {
+        char attr_buf[32];
+        snprintf(attr_buf, sizeof(attr_buf), "MASK EDITOR: 0x%02X",
+                 editor->mask_editor->edit_attr);
+        draw_text_s(sdl_r, x, y, attr_buf, 0xFFFF80FF, s);
+        y += line_h;
+
+        LP_SEC("DRAWING");
+        LP("Edit the 8x8 collision mask");
+        LP("for this attribute. White");
+        LP("pixels are solid, dark pixels");
+        LP("are passable. The ball tests");
+        LP("16 points around its radius");
+        LP("against this mask each frame.");
+        LP_GAP();
+        LP_KEY("L-Click / L-Drag  Solid");
+        LP_KEY("R-Click / R-Drag  Passable");
+        LP_GAP();
+        LP("Changes apply to ALL tiles");
+        LP("on the map that share this");
+        LP("attribute ID.");
+
+        LP_SEC("TOOLS (click buttons)");
+        LP_KEY("Fill     Set all solid");
+        LP_KEY("Clear    Set all passable");
+        LP_KEY("MirH     Mirror horizontal");
+        LP_KEY("MirV     Mirror vertical");
+        LP_KEY("Rot90    Rotate 90 degrees");
+
+        LP_SEC("UNDO / CLOSE");
+        LP_KEY("^Z       Undo last stroke");
+        LP_KEY("^Y       Redo");
+        LP_KEY("ESC      Close mask editor");
+        LP_DIM("  Mask is saved when closed.");
+        LP_DIM("  Use ^S to persist to disk.");
+
+        if (editor->mask_editor->is_flipper_mask) {
+            LP_SEC("FLIPPER MASK");
+            LP("Flipper masks have 3 angle");
+            LP("tabs. Each tab covers a");
+            LP("range of flipper positions.");
+            LP("Click the tabs above the");
+            LP("grid to switch angles.");
+            LP_GAP();
+            LP_KEY("Tab 1: 0-6 degrees");
+            LP_KEY("Tab 2: 7-13 degrees");
+            LP_KEY("Tab 3: 14+ degrees");
+        }
+
+        LP_SEC("BALL TEST POINTS");
+        LP_KEY("Q  Toggle overlay (in coll)");
+        LP_DIM("  Shows 16 test points the");
+        LP_DIM("  physics engine checks per");
+        LP_DIM("  frame. Helps verify mask");
+        LP_DIM("  coverage for ball bounce.");
+
+        goto done;
+    }
+
+    /* ============================================================
+     * NORMAL MODE: Tabbed layout
+     * Tab 0 = Tools (tool-specific help + switch tool)
+     * Tab 1 = Overlays & Controls (view, masks, flippers, file)
+     * Toggle with ` (grave/tilde)
+     * ============================================================ */
+
+    /* ---- Clickable tab headers ---- */
+    {
+        int tab = editor->left_panel_tab;
+        const char *tab0_label = "TOOLS";
+        const char *tab1_label = "OVERLAYS";
+        int tab0_w = text_width_s(tab0_label, s) + 4 * s;
+        int tab1_w = text_width_s(tab1_label, s) + 4 * s;
+        int tab_h = line_h + 2;
+        int tab0_x = x;
+        int tab1_x = x + tab0_w + 2 * s;
+
+        /* Tab 0 button */
+        uint32_t tab0_bg = (tab == 0) ? 0x405060FF : 0x282828FF;
+        uint32_t tab0_col = (tab == 0) ? 0xFFFFFFFF : 0x808080FF;
+        fill_rect(sdl_r, tab0_x, y, tab0_w, tab_h, tab0_bg);
+        draw_text_s(sdl_r, tab0_x + 2 * s, y + 1, tab0_label, tab0_col, s);
+
+        /* Tab 1 button */
+        uint32_t tab1_bg = (tab == 1) ? 0x405060FF : 0x282828FF;
+        uint32_t tab1_col = (tab == 1) ? 0xFFFFFFFF : 0x808080FF;
+        fill_rect(sdl_r, tab1_x, y, tab1_w, tab_h, tab1_bg);
+        draw_text_s(sdl_r, tab1_x + 2 * s, y + 1, tab1_label, tab1_col, s);
+
+        /* Underline active tab */
+        int active_x = (tab == 0) ? tab0_x : tab1_x;
+        int active_w = (tab == 0) ? tab0_w : tab1_w;
+        fill_rect(sdl_r, active_x, y + tab_h - 1, active_w, 1, 0x80C0FFFF);
+
+        /* Click detection */
+        int mx = editor->mouse_x, my = editor->mouse_y;
+        if (editor->mouse_left_clicked) {
+            if (mx >= tab0_x && mx < tab0_x + tab0_w && my >= y && my < y + tab_h) {
+                editor->left_panel_tab = 0;
+            } else if (mx >= tab1_x && mx < tab1_x + tab1_w && my >= y && my < y + tab_h) {
+                editor->left_panel_tab = 1;
+            }
+        }
+
+        y += tab_h + 2;
+    }
+
+    if (editor->left_panel_tab == 0) {
+        /* ==== TAB 0: TOOLS ==== */
+
+        /* ---- Current tool indicator ---- */
+        {
+            const char *tname = "SELECT";
+            uint32_t tcol = 0x60FF60FF;
+            switch (editor->current_tool) {
+                case TOOL_SELECT:     tname = "MODE: SELECT"; break;
+                case TOOL_PLACE:      tname = "MODE: PLACE"; tcol = 0xFF8040FF; break;
+                case TOOL_TILE_PAINT: tname = "MODE: TILE PAINT"; tcol = 0x40C0FFFF; break;
+                case TOOL_COLL_PAINT: tname = "MODE: COLLISION"; tcol = 0xFF6060FF; break;
+                case TOOL_ERASE:      tname = "MODE: ERASE"; tcol = 0xFF4040FF; break;
+                case TOOL_PALETTE:    tname = "MODE: PALETTE"; tcol = 0xFFC040FF; break;
+            }
+            draw_text_s(sdl_r, x, y, tname, tcol, s);
+            y += line_h;
+        }
+
+        /* ---- Context-specific detailed help ---- */
+        switch (editor->current_tool) {
+        case TOOL_SELECT:
+            LP_SEC("SELECT TOOL");
+            LP("Click an object to select it.");
+            LP("Drag to reposition. Snaps to");
+            LP("grid when G is enabled.");
+            LP_GAP();
+            LP_KEY("Click    Select object");
+            LP_KEY("Drag     Move object");
+            LP_KEY("Del      Delete selected");
+            LP_KEY("^D       Duplicate (+16px)");
+            LP_GAP();
+            LP_DIM("Click collision tile to");
+            LP_DIM("select it (with C overlay).");
+            LP_DIM("Drag to move coll tile.");
+            break;
+
+        case TOOL_PLACE:
+            LP_SEC("PLACE TOOL");
+            LP("Click viewport to place the");
+            LP("component selected in the");
+            LP("right sidebar. A ghost shows");
+            LP("where it will go.");
+            LP_GAP();
+            LP_KEY("Click    Place component");
+            LP_KEY("Sidebar  Choose type");
+            LP_GAP();
+            LP("Components: Bumper, Spinner,");
+            LP("Ball Upgrade, Pikachu Saver,");
+            LP("CAVE Light, Diglett, Field");
+            LP("Creature, Staryu, Slot, Rail,");
+            LP("Launch, Wild Mon, Board Trig,");
+            LP("Ditto Slot.");
+            break;
+
+        case TOOL_TILE_PAINT:
+            LP_SEC("TILE PAINT TOOL");
+            LP("Paint tilemap indices onto");
+            LP("the background layer. Tiles");
+            LP("come from VRAM tile data.");
+            LP_GAP();
+            LP_KEY("L-Click  Paint tile");
+            LP_KEY("[  ]     Prev/Next tile idx");
+            LP_KEY("R        Reload tileset PNG");
+            LP_GAP();
+            LP("Custom tiles: place PNG files");
+            LP("named top_tiles.png and/or");
+            LP("bottom_tiles.png in your");
+            LP("table's data/ folder.");
+            LP_GAP();
+            LP_DIM("Format: 2bpp GBC tiles,");
+            LP_DIM("8x8 px each, left-to-right");
+            LP_DIM("top-to-bottom (rgbgfx order)");
+            break;
+
+        case TOOL_COLL_PAINT:
+            LP_SEC("COLLISION PAINT TOOL");
+            LP("Paint collision attributes");
+            LP("onto the collision map.");
+            LP("Each tile has an 8-bit attr");
+            LP("ID and an 8x8 pixel mask.");
+            LP_GAP();
+            LP_KEY("L-Click    Paint attribute");
+            LP_KEY("R-Click    Erase (set 0x00)");
+            LP_KEY("0-9        Quick attr select");
+            LP_DIM("  0=0x00 1=0x10 2=0x20 ...");
+            LP_KEY("Alt+Click  Eyedropper sample");
+            LP_GAP();
+            LP_KEY("Shift+L-Drag  Fill rectangle");
+            LP_KEY("Shift+R-Drag  Erase rectangle");
+            LP_GAP();
+            LP_SEC("COLLISION PRESETS");
+            LP("0x00 Passable (no collision)");
+            LP("0x01 Solid wall");
+            LP("0xFF Border / drain");
+            LP("0xE0 Left flipper zones");
+            LP("0xF0 Right flipper zones");
+            LP("0xD0 Wild mon encounter");
+            break;
+
+        case TOOL_ERASE:
+            LP_SEC("ERASE TOOL");
+            LP("Click on any placed object");
+            LP("to delete it immediately.");
+            LP_GAP();
+            LP_KEY("Click    Delete object");
+            LP_GAP();
+            LP_DIM("Cannot erase collision or");
+            LP_DIM("tiles. Use Collision tool");
+            LP_DIM("R-Click to clear coll.");
+            break;
+
+        case TOOL_PALETTE:
+            LP_SEC("PALETTE EDITOR");
+            LP("Edit BG palette colors.");
+            LP("GBC uses RGB555 (5 bits per");
+            LP("channel, values 0-31).");
+            LP("8 palettes x 4 colors each.");
+            LP_GAP();
+            LP_KEY("0-7      Select palette");
+            LP_KEY("[  ]     Prev/Next color");
+            LP_KEY("Up/Dn    Adjust channel");
+            LP_DIM("  Hold for auto-repeat.");
+            LP_KEY("Left/Rt  Cycle R > G > B");
+            LP_KEY("Tab      Cycle edit scope");
+            LP_DIM("  Both > Top > Bottom");
+            LP_GAP();
+            LP("Sidebar shows all 8 palettes");
+            LP("with 4 color swatches, plus");
+            LP("R/G/B sliders for the active");
+            LP("color. Hex value shown.");
+            LP_GAP();
+            LP_DIM("Top/Bottom scope lets you");
+            LP_DIM("set different palettes for");
+            LP_DIM("each stage half in combined");
+            LP_DIM("view tables.");
+            break;
+        }
+
+        /* ---- Switch tool (compact) ---- */
+        LP_SEC("SWITCH TOOL");
+        LP_KEY("S Select  P Place  E Erase");
+        LP_KEY("T Tile    X Coll   L Palette");
+
+        /* ---- Quick reference ---- */
+        LP_SEC("FILE");
+        LP_KEY("^S  Save   ^Z  Undo");
+        LP_KEY("F5  Play   F6  Reload Lua");
+        LP_KEY("ESC Back   Tab Checklist");
+
+    } else {
+        /* ==== TAB 1: OVERLAYS & CONTROLS ==== */
+
+        LP_SEC("VIEW CONTROLS");
+        LP_KEY("G        Toggle grid + snap");
+        LP_KEY("C        Toggle coll overlay");
+        LP_KEY("B        Toggle obj bounds");
+        LP_KEY("I        Tile VRAM inspector");
+        LP_DIM("  Shows tile index, address,");
+        LP_DIM("  bank, palette, flip, and");
+        LP_DIM("  pixel preview at cursor.");
+        LP_KEY("H        Hide buffer rows");
+        LP_DIM("  Combined view only. Hides");
+        LP_DIM("  off-screen rows 18-31.");
+        LP_KEY("Home     Center + zoom 2x");
+        LP_KEY("Wheel    Zoom in/out");
+        LP_KEY("Mid-Drag Pan camera");
+
+        LP_SEC("FLIPPER SWEEP");
+        LP_KEY("F        Toggle flipper viz");
+        LP_DIM("  Animates flipper collision");
+        LP_DIM("  masks through 16 angles.");
+        LP_DIM("  Shows pivot crosshairs,");
+        LP_DIM("  detection rect, and mask");
+        LP_DIM("  geometry per angle set.");
+        LP_GAP();
+        LP_DIM("  Requires C (coll overlay).");
+        LP_DIM("  Only on tables w/ flippers.");
+        LP_GAP();
+        LP("  Angle sets:");
+        LP("    Red    = 0-6  (down)");
+        LP("    Yellow = 7-13 (mid)");
+        LP("    Green  = 14+  (up)");
+
+        LP_SEC("MASK EDITOR");
+        LP_KEY("M        Open mask editor");
+        LP_DIM("  Hover a collision tile");
+        LP_DIM("  (C overlay on, attr != 0)");
+        LP_DIM("  and press M to edit its");
+        LP_DIM("  8x8 solid/passable bitmap.");
+        LP_KEY("Q        Ball test points");
+        LP_DIM("  Visualize the 16 collision");
+        LP_DIM("  check points around ball.");
+
+        LP_SEC("FILE & PLAYTEST");
+        LP_KEY("^S       Save table to disk");
+        LP_KEY("^Z       Undo last action");
+        LP_KEY("F5       Start playtest");
+        LP_DIM("  Injects collision, tiles,");
+        LP_DIM("  and palettes into game.");
+        LP_KEY("F6       Hot-reload Lua");
+        LP_DIM("  During playtest only.");
+        LP_KEY("ESC      Back / cancel tool");
+        LP_DIM("  Tool > Select > Picker");
+        LP_KEY("Tab      Readiness checklist");
+
+        /* ---- Switch tool (compact) ---- */
+        LP_SEC("SWITCH TOOL");
+        LP_KEY("S Select  P Place  E Erase");
+        LP_KEY("T Tile    X Coll   L Palette");
+    }
+
+    /* ---- Status (shown on both tabs) ---- */
+    {
+        char buf[32];
+        y += sec_gap;
+        if (y + line_h * 5 <= max_y) {
+            fill_rect(sdl_r, x, y, panel_w - pad * 2, 1, 0x404040FF);
+            y += half_h;
+            snprintf(buf, sizeof(buf), "Zoom: %.1fx", editor->zoom);
+            LP(buf);
+            snprintf(buf, sizeof(buf), "Objs: %d/%d",
+                     editor->table.num_objects, MAX_EDITOR_OBJECTS);
+            LP(buf);
+            snprintf(buf, sizeof(buf), "Grid: %s  Coll: %s",
+                     editor->snap_to_grid ? "ON" : "OFF",
+                     editor->show_collision_overlay ? "ON" : "OFF");
+            LP(buf);
+            if (editor->show_flipper_sweep) {
+                int aset = (editor->flipper_anim_angle <= 6) ? 0 :
+                           (editor->flipper_anim_angle <= 13) ? 1 : 2;
+                snprintf(buf, sizeof(buf), "Flip: %d/15 (set %d)",
+                         editor->flipper_anim_angle, aset);
+                LP(buf);
+            }
+        }
+    }
+
+done:
+    #undef LP_SEC
+    #undef LP
+    #undef LP_KEY
+    #undef LP_DIM
+    #undef LP_GAP
+    (void)0;
+}
+
+/*=============================================================================
  * Render: Table Readiness Checklist
  *===========================================================================*/
 
@@ -1299,9 +2151,10 @@ static void render_checklist(EditorState *editor, SDL_Renderer *sdl_r, int win_w
     int s = editor->ui_scale;
     int row_h = 7 * s + 2;
     int pad = 6;
-    int panel_w = SIDEBAR_BASE_W;
-    int panel_x = pad;
-    int panel_y = 12 * s;
+    int panel_w = SIDEBAR_BASE_W + 120 * s;  /* Wider to fit all content */
+    if (panel_w > win_w - 40) panel_w = win_w - 40;
+    int panel_x = (win_w - panel_w) / 2;     /* Centered horizontally */
+    int panel_y = (win_h) / 3;               /* Upper-third vertically */
 
     int disp_rows = editor_display_rows(editor);
     int max_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
@@ -1509,18 +2362,28 @@ static void render_inspector(EditorState *editor, SDL_Renderer *sdl_r, int win_w
 static void render_collision_inspector(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
     if (editor->selected_object >= 0) return;  /* Object inspector takes priority */
     if (editor->selected_coll_col < 0) return;
+    /* Hide when mask editor panel is open */
+    if (editor->mask_editor && editor->mask_editor->active) return;
 
     int s = editor->ui_scale;
     int row_h = 7 * s + 2;
-    int pad = 4;
-    int iw = SIDEBAR_BASE_W;
-    int ix = 0;
-    int iy = 8 * s;
+    int pad = 6;
+    int iw = 30 * (4 + 1) * s + pad * 2;  /* ~30 chars wide + padding */
+    int ix = win_w - SIDEBAR_BASE_W - iw - 8;  /* Upper-right, left of sidebar */
+    int iy = 40;
+    if (ix < 0) ix = 0;
     int label_x = ix + pad;
-    int value_x = ix + 40 * s;
+    int value_x = ix + 10 * (4 + 1) * s;  /* 10 chars in for values */
 
     SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
-    fill_rect(sdl_r, ix, iy, iw, row_h * 6 + pad * 4, 0x1A1A1AE8);
+
+    /* Calculate panel height: need extra space for mask preview */
+    int mask_preview_h = 0;
+    if (editor->mask_editor && editor->game_state_ref && editor->selected_coll_attr != 0) {
+        mask_preview_h = 8 * s * 2 + 8;  /* mask_size + padding */
+    }
+    int panel_total_h = row_h * 7 + pad * 4 + mask_preview_h;
+    fill_rect(sdl_r, ix, iy, iw, panel_total_h, 0x1A1A1AE8);
 
     /* Title */
     draw_text_s(sdl_r, label_x, iy + 2, "-- COLLISION TILE --", 0xFFFF80FF, s);
@@ -1554,8 +2417,25 @@ static void render_collision_inspector(EditorState *editor, SDL_Renderer *sdl_r,
     uint32_t swatch = collision_attr_color(editor->selected_coll_attr) | 0xFF;
     fill_rect(sdl_r, label_x, iy + 1, 4 * s, row_h - 2, swatch);
 
+    /* Mask preview in collision inspector */
+    if (editor->mask_editor && editor->game_state_ref && editor->selected_coll_attr != 0) {
+        iy += 2;
+        int mask_scale = s * 2;
+        int mask_size = 8 * mask_scale;
+        mask_editor_render_preview(editor->mask_editor, editor->game_state_ref,
+                                    sdl_r, label_x, iy, mask_scale,
+                                    editor->selected_coll_attr);
+
+        /* "M: Edit" label next to preview */
+        draw_text_s(sdl_r, label_x + mask_size + pad, iy + mask_size / 2 - 3 * s,
+                   "M: Edit", 0x80C0FFFF, s);
+        iy += mask_size + 4;
+    } else {
+        iy += row_h;
+    }
+
     /* Separator */
-    iy += row_h + 4;
+    iy += 4;
     draw_line(sdl_r, ix + 4, iy, ix + iw - 4, iy, 0x606060FF);
     iy += 6;
 
@@ -1620,7 +2500,7 @@ static void render_help_bar(EditorState *editor, SDL_Renderer *sdl_r, int win_w)
         draw_text_s(sdl_r, 4, 3, "^S:Save  Arrows:Edit  Tab:Scope",
             0xA0A0A0FF, s);
     } else if (editor->current_tool == TOOL_COLL_PAINT) {
-        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  Alt:Sample",
+        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  Alt:Sample  M:Mask  Q:Pts",
             0xA0A0A0FF, s);
     } else {
         draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  L:Pal",
@@ -1755,20 +2635,35 @@ void editor_render_viewport(EditorState *editor, Renderer *renderer, Platform *p
     render_tilemap_preview(editor, sdl_r, editor->vram_ref, editor->table.bg_palettes);
     render_palette_highlight(editor, sdl_r);
     render_collision_overlay(editor, sdl_r);
+    render_flipper_sweep(editor, sdl_r);
+    render_mask_edit_highlight(editor, sdl_r);
     render_fill_preview(editor, sdl_r);
     render_viewport_indicators(editor, sdl_r);
     render_grid(editor, sdl_r);
     render_objects(editor, sdl_r);
     render_placement_ghost(editor, sdl_r);
 
+    /* Ball test point overlay (before UI panels, on top of collision overlay) */
+    if (editor->mask_editor && editor->game_state_ref) {
+        mask_editor_render_test_points(editor->mask_editor, editor->game_state_ref,
+                                        editor, sdl_r);
+    }
+
     /* UI panels */
+    render_left_panel(editor, sdl_r, win_w, win_h);
     render_sidebar(editor, sdl_r, win_w, win_h);
     render_inspector(editor, sdl_r, win_w, win_h);
     render_collision_inspector(editor, sdl_r, win_w, win_h);
     render_checklist(editor, sdl_r, win_w, win_h);
     render_collision_tooltip(editor, sdl_r);
+    render_tile_inspector(editor, sdl_r, win_w, win_h);
     render_status_bar(editor, sdl_r, win_w, win_h);
     render_help_bar(editor, sdl_r, win_w);
+
+    /* Mask pixel editor panel (modal, drawn on top of everything) */
+    if (editor->mask_editor) {
+        mask_editor_render_panel(editor->mask_editor, sdl_r, editor, win_w, win_h);
+    }
 
     SDL_RenderPresent(sdl_r);
 }

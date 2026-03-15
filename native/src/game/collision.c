@@ -323,6 +323,29 @@ void collision_clear_overrides(void) {
     collision_map_override = NULL;
 }
 
+const uint8_t *collision_get_masks(size_t *out_size) {
+    if (out_size) *out_size = collision_masks_size;
+    return collision_masks;
+}
+
+const uint8_t *collision_get_flipper_masks(bool is_right, size_t *out_size) {
+    if (is_right) {
+        if (out_size) *out_size = bottom_right_masks_size;
+        return bottom_right_masks;
+    } else {
+        if (out_size) *out_size = bottom_left_masks_size;
+        return bottom_left_masks;
+    }
+}
+
+void collision_apply_custom_mask(uint8_t attr, const uint8_t *mask_data, int mask_bytes) {
+    if (!collision_masks || !mask_data) return;
+    size_t offset = (size_t)attr * 8;
+    size_t copy = (size_t)mask_bytes;
+    if (offset + copy > collision_masks_size) return;
+    memcpy(collision_masks + offset, mask_data, copy);
+}
+
 /*=============================================================================
  * Collision map loading
  *===========================================================================*/
@@ -484,9 +507,9 @@ void load_stage_collision_attributes(GameState *state) {
         EditorState *ed = state->editor_state;
         uint8_t (*src)[32] = (state->current_stage & 1) ?
             ed->playtest_collision_bottom : ed->playtest_collision_top;
-        for (int r = 0; r < 21; r++) {
+        for (int r = 0; r < 22; r++) {
             for (int c = 0; c < 32; c++) {
-                state->stage_collision_map[(r + 3) * 32 + c] = src[r][c];
+                state->stage_collision_map[(r + 2) * 32 + c] = src[r][c];
             }
         }
     }
