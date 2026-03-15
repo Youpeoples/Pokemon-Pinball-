@@ -32,7 +32,8 @@ typedef struct VirtualVRAM VirtualVRAM;
 #define MAX_EDITOR_UNDO      64
 #define EDITOR_GRID_SIZE      8    /* Default grid snap: 8px (1 tile) */
 #define MAX_PICKER_TABLES    16
-#define UI_SCALE              2    /* Scale factor for all UI text/panels */
+#define UI_SCALE              4    /* Scale factor for all UI text/panels */
+#define EDITOR_SIDEBAR_W    360    /* Sidebar width in screen pixels */
 
 /* Component type IDs */
 typedef enum {
@@ -140,6 +141,7 @@ typedef enum {
     TOOL_TILE_PAINT,   /* Paint tilemap */
     TOOL_COLL_PAINT,   /* Paint collision attributes */
     TOOL_ERASE,        /* Delete objects */
+    TOOL_PALETTE,      /* Edit palette colors */
 } EditorTool;
 
 /*=============================================================================
@@ -207,6 +209,16 @@ typedef struct EditorState {
     uint8_t playtest_collision_bottom[64][32]; /* Editor collision for bottom stage */
     bool playtest_has_collision;               /* True = override collision after load */
 
+    /* Custom tileset flags */
+    bool has_custom_tiles_top;                 /* True = vram_top loaded from custom PNG */
+    bool has_custom_tiles_bottom;              /* True = vram_bottom loaded from custom PNG */
+    bool playtest_has_custom_tiles;            /* True = inject custom VRAM during playtest */
+
+    /* Playtest palette injection */
+    GBCPalette playtest_palettes_top[8];       /* Editor BG palettes for top stage */
+    GBCPalette playtest_palettes_bottom[8];    /* Editor BG palettes for bottom stage */
+    bool playtest_has_custom_palettes;         /* True = override palettes after load */
+
     /* Saved game state for snapshot/restore on editor entry/exit */
     uint8_t *saved_game_state;     /* malloc'd copy of GameState */
     size_t saved_game_state_size;
@@ -234,6 +246,25 @@ typedef struct EditorState {
     uint8_t paint_tile_index;      /* Which tile index to paint */
     uint8_t paint_tile_palette;    /* Palette for painted tiles */
     uint8_t paint_coll_attr;       /* Collision attribute to paint */
+
+    /* Eyedropper state */
+    uint8_t sampled_coll_attr;     /* Last Alt+clicked attribute */
+    bool has_sampled_attr;         /* True after first eyedropper use */
+
+    /* Palette editor state */
+    int pal_selected_palette;      /* Which palette (0-7), default 0 */
+    int pal_selected_color;        /* Which color slot (0-3), default 0 */
+    int pal_edit_channel;          /* 0=R, 1=G, 2=B */
+    int pal_edit_scope;            /* 0=both, 1=top only, 2=bottom only */
+
+    /* Fill rectangle state */
+    bool fill_active;              /* Shift+drag in progress */
+    bool fill_erasing;             /* Right-click fill = erase */
+    int fill_start_col;            /* Start tile column */
+    int fill_start_row;            /* Start display row */
+
+    /* Table readiness checklist */
+    bool show_checklist;           /* Toggled by Tab key */
 
     /* VRAM reference for tilemap preview (points to live VRAM, safe while game paused) */
     VirtualVRAM *vram_ref;
@@ -333,6 +364,12 @@ void editor_scan_tables(EditorState *editor);
 
 /* Open a table folder for editing (load manifest, init editor) */
 void editor_open_table(EditorState *editor, int picker_index, GameState *state);
+
+/* Create a new blank table with template collision data */
+void editor_create_new_table(EditorState *editor, GameState *state);
+
+/* Load persisted custom data (collision, tilemaps, tilesets) from table folder */
+void editor_load_custom_data(EditorState *editor);
 
 /*=============================================================================
  * Live Playtest

@@ -610,6 +610,56 @@ static void render_collision_overlay(EditorState *editor, SDL_Renderer *sdl_r) {
 }
 
 /*=============================================================================
+ * Render: Palette Highlight Overlay
+ *
+ * When TOOL_PALETTE is active, highlights all tiles in the viewport that
+ * reference the currently selected palette index. This shows the user
+ * exactly which tiles are affected by palette changes.
+ *===========================================================================*/
+
+static void render_palette_highlight(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (editor->current_tool != TOOL_PALETTE) return;
+    if (!editor->table.has_vram) return;
+
+    int win_w, win_h;
+    SDL_GetRendererOutputSize(sdl_r, &win_w, &win_h);
+
+    int disp_rows = editor_display_rows(editor);
+    int total_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+    float tile_screen = 8.0f * editor->zoom;
+    if (tile_screen < 2.0f) return;
+
+    int start_col = (int)(editor->camera_x / 8.0f);
+    int start_row = (int)(editor->camera_y / 8.0f);
+    int end_col = start_col + (int)(win_w / tile_screen) + 2;
+    int end_row = start_row + (int)(win_h / tile_screen) + 2;
+    if (start_col < 0) start_col = 0;
+    if (start_row < 0) start_row = 0;
+    if (end_col > total_cols) end_col = total_cols;
+    if (end_row > disp_rows) end_row = disp_rows;
+
+    int sel_pal = editor->pal_selected_palette;
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    for (int row = start_row; row < end_row; row++) {
+        int data_row = editor_display_to_data_row(editor, row);
+        for (int col = start_col; col < end_col; col++) {
+            uint8_t attr = editor->table.tilemap_attrs[data_row][col];
+            int tile_pal = attr & 0x07;
+            if (tile_pal != sel_pal) continue;
+
+            int sx = world_to_screen_x(editor, (float)(col * 8));
+            int sy = world_to_screen_y(editor, (float)(row * 8));
+            int size = (int)tile_screen;
+            if (size < 1) size = 1;
+
+            /* Green outline only — no fill so tile colors stay true */
+            draw_rect_outline(sdl_r, sx, sy, size, size, 0x00FF00C0);
+        }
+    }
+}
+
+/*=============================================================================
  * Render: Viewport Rectangles & Stage Separator
  *
  * Shows the in-game visible area (160x144) for each stage, matching the
@@ -634,9 +684,9 @@ static void render_viewport_indicators(EditorState *editor, SDL_Renderer *sdl_r)
         draw_rect_outline(sdl_r, top_vp_x, top_vp_y, top_vp_w, top_vp_h, COL_VIEWPORT);
         draw_rect_outline(sdl_r, top_vp_x - 1, top_vp_y - 1, top_vp_w + 2, top_vp_h + 2, COL_VIEWPORT);
 
-        /* Bottom stage viewport (SCX=default_scx, display rows 18-35) */
+        /* Bottom stage viewport (aligned to col 0, display rows 18-35) */
         float bottom_y = 18.0f * 8.0f;  /* Display row 18 */
-        int bot_vp_x = world_to_screen_x(editor, (float)editor->table.default_scx);
+        int bot_vp_x = world_to_screen_x(editor, 0.0f);
         int bot_vp_y = world_to_screen_y(editor, bottom_y);
         int bot_vp_w = (int)(160.0f * editor->zoom);
         int bot_vp_h = (int)(144.0f * editor->zoom);
@@ -730,10 +780,23 @@ static void render_collision_tooltip(EditorState *editor, SDL_Renderer *sdl_r) {
 }
 
 /*=============================================================================
- * Render: Sidebar (Component Palette) — scaled
+ * Render: Sidebar (Component Palette / Collision Presets) — scaled
  *===========================================================================*/
 
-#define SIDEBAR_BASE_W  200  /* Fixed sidebar width in screen pixels */
+#define SIDEBAR_BASE_W  EDITOR_SIDEBAR_W  /* From editor.h */
+
+/* Collision preset table */
+static const struct { const char *name; uint8_t attr; uint32_t color; } coll_presets[] = {
+    { "Passable",      0x00, 0x404040FF },
+    { "Solid Wall",    0x01, 0x101010FF },
+    { "Border/Drain",  0xFF, 0x303030FF },
+    { "Left Flipper",  0xE0, 0xFF8040FF },
+    { "Right Flipper", 0xF0, 0x40A0FFFF },
+    { "Bumper Area",   0x32, 0x40FF40FF },
+    { "Trigger Zone",  0x40, 0x4040FFFF },
+    { "Wild Mon",      0xD0, 0xFF4040FF },
+};
+#define NUM_FIXED_PRESETS 8
 
 static void render_sidebar(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
     int s = editor->ui_scale;
@@ -746,9 +809,6 @@ static void render_sidebar(EditorState *editor, SDL_Renderer *sdl_r, int win_w, 
     int sx = win_w - sidebar_w;
     fill_rect(sdl_r, sx, 0, sidebar_w, win_h, COL_SIDEBAR_BG);
 
-    /* Title */
-    draw_text_s(sdl_r, sx + pad, pad, "COMPONENTS", COL_TEXT_WHITE, s);
-
     /* Tool mode indicator */
     const char *tool_name = "SELECT";
     switch (editor->current_tool) {
@@ -757,39 +817,594 @@ static void render_sidebar(EditorState *editor, SDL_Renderer *sdl_r, int win_w, 
         case TOOL_TILE_PAINT: tool_name = "TILE"; break;
         case TOOL_COLL_PAINT: tool_name = "COLLISION"; break;
         case TOOL_ERASE:      tool_name = "ERASE"; break;
-    }
-    draw_text_s(sdl_r, sx + pad, pad + 7 * s, tool_name, 0xFFFF80FF, s);
-
-    /* Component list */
-    int y = pad + 16 * s;
-    for (int i = 1; i < COMP_COUNT; i++) {
-        bool selected = (editor->palette_selection == i && editor->current_tool == TOOL_PLACE);
-        uint32_t bg = selected ? COL_SIDEBAR_SEL : COL_SIDEBAR_ITEM;
-        fill_rect(sdl_r, sx + 2, y, sidebar_w - 4, item_h - 2, bg);
-
-        /* Color swatch */
-        uint32_t swatch = (i < COMP_COUNT) ? comp_colors[i] : COL_OBJECT_BOX;
-        fill_rect(sdl_r, sx + pad, y + 2, 3 * s, item_h - 6, swatch);
-
-        /* Name */
-        draw_text_s(sdl_r, sx + pad + 4 * s, y + 2, editor_component_name(i), COL_TEXT_WHITE, s);
-
-        y += item_h;
-        if (y + item_h > win_h) break;
+        case TOOL_PALETTE:    tool_name = "PALETTE"; break;
     }
 
-    /* Check for sidebar clicks */
-    if (editor->mouse_left_clicked && editor->mouse_x >= sx) {
-        int list_start_y = pad + 16 * s;
-        int click_y = editor->mouse_y - list_start_y;
-        if (click_y >= 0) {
-            int idx = click_y / item_h + 1;
-            if (idx >= 1 && idx < COMP_COUNT) {
-                editor->palette_selection = (ComponentType)idx;
-                editor->current_tool = TOOL_PLACE;
+    if (editor->current_tool == TOOL_PALETTE) {
+        /* === Palette Editor Sidebar === */
+        int scope = editor->pal_edit_scope;
+
+        /* Pre-compute total content height for vertical centering */
+        int swatch_sz_pre = 4 * s;
+        int row_height_pre = swatch_sz_pre + 4;
+        int content_h = 15 * s;  /* header + tool label */
+        if (editor->combined_view) content_h += 7 * s + 2;  /* scope label */
+        content_h += 2 + 8 * row_height_pre;  /* 8 palette rows */
+        content_h += 10 + (7 * s + 2) * 2 + 4;  /* separator + info + hex */
+        content_h += 3 * (4 * s + 3);  /* RGB bars */
+        content_h += 2 + 8 * s + 4;  /* preview swatch */
+        content_h += 4 + 4 * (7 * s);  /* separator + hints */
+        if (editor->combined_view) content_h += 7 * s;  /* tab hint */
+
+        int y_offset = (win_h - content_h) / 2;
+        if (y_offset < pad) y_offset = pad;
+
+        draw_text_s(sdl_r, sx + pad, y_offset, "PALETTE", COL_TEXT_WHITE, s);
+        draw_text_s(sdl_r, sx + pad, y_offset + 7 * s, tool_name, 0xFFFF80FF, s);
+
+        /* Scope indicator (combined view only) */
+        int y = y_offset + 15 * s;
+        if (editor->combined_view) {
+            const char *scope_label;
+            uint32_t scope_col;
+            if (scope == 0)      { scope_label = "BOTH HALVES"; scope_col = 0x80FF80FF; }
+            else if (scope == 1) { scope_label = "TOP ONLY";    scope_col = 0xFF8080FF; }
+            else                 { scope_label = "BOTTOM ONLY"; scope_col = 0x8080FFFF; }
+            draw_text_s(sdl_r, sx + pad, y, scope_label, scope_col, s);
+            y += 7 * s + 2;
+        }
+
+        y += 2;
+        int swatch_sz = 4 * s;       /* Each color swatch size */
+        int swatch_gap = 2;           /* Gap between swatches */
+        int row_height = swatch_sz + 4;
+
+        /* Choose which palette array to read from based on scope */
+        GBCPalette *display_palettes;
+        if (scope == 1) {
+            display_palettes = editor->palettes_top;
+        } else if (scope == 2) {
+            display_palettes = editor->palettes_bottom;
+        } else {
+            display_palettes = editor->table.bg_palettes;
+        }
+
+        /* Draw 8 palette rows, each with 4 color swatches */
+        for (int p = 0; p < 8; p++) {
+            bool pal_sel = (p == editor->pal_selected_palette);
+
+            /* Highlight selected palette row */
+            if (pal_sel) {
+                fill_rect(sdl_r, sx + 2, y - 1, sidebar_w - 4, row_height + 2, COL_SIDEBAR_SEL);
+            }
+
+            /* Palette number label */
+            char plabel[4];
+            snprintf(plabel, sizeof(plabel), "%d", p);
+            draw_text_s(sdl_r, sx + pad, y + 2, plabel, pal_sel ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+
+            /* 4 color swatches */
+            int swatch_x = sx + pad + 6 * s;
+            for (int c = 0; c < 4; c++) {
+                uint16_t color = display_palettes[p].colors[c];
+                uint32_t rgba = rgb555_to_rgba(color);
+
+                /* Draw swatch fill */
+                fill_rect(sdl_r, swatch_x, y, swatch_sz, swatch_sz, rgba);
+
+                /* Yellow outline on selected swatch */
+                if (pal_sel && c == editor->pal_selected_color) {
+                    draw_rect_outline(sdl_r, swatch_x - 1, y - 1,
+                                      swatch_sz + 2, swatch_sz + 2, COL_SELECT_BOX);
+                    draw_rect_outline(sdl_r, swatch_x - 2, y - 2,
+                                      swatch_sz + 4, swatch_sz + 4, COL_SELECT_BOX);
+                } else {
+                    draw_rect_outline(sdl_r, swatch_x, y, swatch_sz, swatch_sz, 0x606060FF);
+                }
+
+                swatch_x += swatch_sz + swatch_gap;
+            }
+
+            y += row_height;
+        }
+
+        /* Separator */
+        y += 4;
+        draw_line(sdl_r, sx + 4, y, sx + sidebar_w - 4, y, 0x606060FF);
+        y += 6;
+
+        /* Selected palette/color info */
+        {
+            int pal = editor->pal_selected_palette;
+            int slot = editor->pal_selected_color;
+            uint16_t color = display_palettes[pal].colors[slot];
+            int r_val = color & 0x1F;
+            int g_val = (color >> 5) & 0x1F;
+            int b_val = (color >> 10) & 0x1F;
+
+            char info[48];
+            snprintf(info, sizeof(info), "Pal %d  Color %d", pal, slot);
+            draw_text_s(sdl_r, sx + pad, y, info, COL_TEXT_WHITE, s);
+            y += 7 * s + 2;
+
+            /* RGB555 hex value */
+            snprintf(info, sizeof(info), "0x%04X", color);
+            draw_text_s(sdl_r, sx + pad, y, info, COL_TEXT_DIM, s);
+            y += 7 * s + 4;
+
+            /* RGB channel bars */
+            int bar_w = sidebar_w - pad * 2 - 20 * s;
+            int bar_h_px = 4 * s;
+            int bar_x = sx + pad + 16 * s;
+
+            /* R channel */
+            {
+                bool active = (editor->pal_edit_channel == 0);
+                uint32_t label_col = active ? 0xFF6060FF : COL_TEXT_DIM;
+                draw_text_s(sdl_r, sx + pad, y, "R", label_col, s);
+                snprintf(info, sizeof(info), "%2d", r_val);
+                draw_text_s(sdl_r, sx + pad + 6 * s, y, info, active ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+                fill_rect(sdl_r, bar_x, y, bar_w, bar_h_px, 0x303030FF);
+                int fill_w = bar_w > 0 ? (r_val * bar_w) / 31 : 0;
+                if (fill_w > 0) fill_rect(sdl_r, bar_x, y, fill_w, bar_h_px, 0xFF4040FF);
+                if (active) draw_rect_outline(sdl_r, bar_x - 1, y - 1, bar_w + 2, bar_h_px + 2, COL_TEXT_WHITE);
+                y += bar_h_px + 3;
+            }
+
+            /* G channel */
+            {
+                bool active = (editor->pal_edit_channel == 1);
+                uint32_t label_col = active ? 0x60FF60FF : COL_TEXT_DIM;
+                draw_text_s(sdl_r, sx + pad, y, "G", label_col, s);
+                snprintf(info, sizeof(info), "%2d", g_val);
+                draw_text_s(sdl_r, sx + pad + 6 * s, y, info, active ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+                fill_rect(sdl_r, bar_x, y, bar_w, bar_h_px, 0x303030FF);
+                int fill_w = bar_w > 0 ? (g_val * bar_w) / 31 : 0;
+                if (fill_w > 0) fill_rect(sdl_r, bar_x, y, fill_w, bar_h_px, 0x40FF40FF);
+                if (active) draw_rect_outline(sdl_r, bar_x - 1, y - 1, bar_w + 2, bar_h_px + 2, COL_TEXT_WHITE);
+                y += bar_h_px + 3;
+            }
+
+            /* B channel */
+            {
+                bool active = (editor->pal_edit_channel == 2);
+                uint32_t label_col = active ? 0x6060FFFF : COL_TEXT_DIM;
+                draw_text_s(sdl_r, sx + pad, y, "B", label_col, s);
+                snprintf(info, sizeof(info), "%2d", b_val);
+                draw_text_s(sdl_r, sx + pad + 6 * s, y, info, active ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+                fill_rect(sdl_r, bar_x, y, bar_w, bar_h_px, 0x303030FF);
+                int fill_w = bar_w > 0 ? (b_val * bar_w) / 31 : 0;
+                if (fill_w > 0) fill_rect(sdl_r, bar_x, y, fill_w, bar_h_px, 0x4040FFFF);
+                if (active) draw_rect_outline(sdl_r, bar_x - 1, y - 1, bar_w + 2, bar_h_px + 2, COL_TEXT_WHITE);
+                y += bar_h_px + 3;
+            }
+
+            /* Color preview swatch */
+            y += 2;
+            uint32_t preview_rgba = rgb555_to_rgba(color);
+            fill_rect(sdl_r, sx + pad, y, sidebar_w - pad * 2, 8 * s, preview_rgba);
+            draw_rect_outline(sdl_r, sx + pad, y, sidebar_w - pad * 2, 8 * s, 0x808080FF);
+            y += 8 * s + 4;
+        }
+
+        /* Separator */
+        draw_line(sdl_r, sx + 4, y, sx + sidebar_w - 4, y, 0x606060FF);
+        y += 4;
+
+        /* Hints */
+        draw_text_s(sdl_r, sx + pad, y, "Up/Dn: Value", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "L/R: Channel", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "0-7: Palette", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "[/]: Color", 0x808080FF, s);
+        if (editor->combined_view) {
+            y += 7 * s;
+            draw_text_s(sdl_r, sx + pad, y, "Tab: Scope", 0x808080FF, s);
+        }
+
+        /* Click handling for palette swatches */
+        if (editor->mouse_left_clicked && editor->mouse_x >= sx) {
+            /* Calculate swatch area start (after scope label), matching y_offset */
+            int swatch_area_y = y_offset + 15 * s;
+            if (editor->combined_view) swatch_area_y += 7 * s + 2;
+            swatch_area_y += 2;
+
+            int click_rel_y = editor->mouse_y - swatch_area_y;
+            if (click_rel_y >= 0) {
+                int clicked_pal = click_rel_y / row_height;
+                if (clicked_pal >= 0 && clicked_pal < 8) {
+                    editor->pal_selected_palette = clicked_pal;
+                    /* Check which color swatch was clicked */
+                    int swatch_start_x = sx + pad + 6 * s;
+                    int click_x = editor->mouse_x - swatch_start_x;
+                    if (click_x >= 0) {
+                        int clicked_color = click_x / (swatch_sz + swatch_gap);
+                        if (clicked_color >= 0 && clicked_color < 4) {
+                            editor->pal_selected_color = clicked_color;
+                        }
+                    }
+                }
+            }
+        }
+    } else if (editor->current_tool == TOOL_COLL_PAINT) {
+        /* === Collision Preset Sidebar === */
+        int total_presets_pre = NUM_FIXED_PRESETS + (editor->has_sampled_attr ? 1 : 0);
+        int coll_content_h = 16 * s + total_presets_pre * item_h + 4 + 4 * (7 * s);
+        int coll_y_offset = (win_h - coll_content_h) / 2;
+        if (coll_y_offset < pad) coll_y_offset = pad;
+
+        draw_text_s(sdl_r, sx + pad, coll_y_offset, "COLL PRESETS", COL_TEXT_WHITE, s);
+        draw_text_s(sdl_r, sx + pad, coll_y_offset + 7 * s, tool_name, 0xFFFF80FF, s);
+
+        int y = coll_y_offset + 16 * s;
+
+        /* Preset list */
+        int total_presets = NUM_FIXED_PRESETS + (editor->has_sampled_attr ? 1 : 0);
+        for (int i = 0; i < total_presets; i++) {
+            uint8_t preset_attr;
+            const char *preset_name;
+            uint32_t swatch_color;
+            char sampled_buf[24];
+
+            if (i < NUM_FIXED_PRESETS) {
+                preset_attr = coll_presets[i].attr;
+                preset_name = coll_presets[i].name;
+                swatch_color = coll_presets[i].color;
+            } else {
+                /* Sampled entry */
+                preset_attr = editor->sampled_coll_attr;
+                snprintf(sampled_buf, sizeof(sampled_buf), "Sampled 0x%02X", preset_attr);
+                preset_name = sampled_buf;
+                uint32_t c = collision_attr_color(preset_attr);
+                swatch_color = c ? (c | 0xFF) : 0x808080FF;
+            }
+
+            bool selected = (editor->paint_coll_attr == preset_attr);
+            uint32_t bg = selected ? COL_SIDEBAR_SEL : COL_SIDEBAR_ITEM;
+            fill_rect(sdl_r, sx + 2, y, sidebar_w - 4, item_h - 2, bg);
+
+            /* Color swatch */
+            fill_rect(sdl_r, sx + pad, y + 2, 3 * s, item_h - 6, swatch_color);
+
+            /* Name */
+            draw_text_s(sdl_r, sx + pad + 4 * s, y + 2, preset_name, COL_TEXT_WHITE, s);
+
+            /* Hex value on right */
+            char hex[6];
+            snprintf(hex, sizeof(hex), "0x%02X", preset_attr);
+            int hex_w = text_width_s(hex, s);
+            draw_text_s(sdl_r, sx + sidebar_w - pad - hex_w, y + 2, hex, COL_TEXT_DIM, s);
+
+            y += item_h;
+            if (y + item_h > win_h - 60 * s) break;
+        }
+
+        /* Hint text below presets */
+        y += 4;
+        draw_text_s(sdl_r, sx + pad, y, "Alt+Click: Sample", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "Shift+Drag: Fill", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "RClick: Erase", 0x808080FF, s);
+        y += 7 * s;
+        draw_text_s(sdl_r, sx + pad, y, "Tab: Checklist", 0x808080FF, s);
+
+        /* Sidebar click handling for presets */
+        if (editor->mouse_left_clicked && editor->mouse_x >= sx) {
+            int list_start_y = coll_y_offset + 16 * s;
+            int click_y = editor->mouse_y - list_start_y;
+            if (click_y >= 0) {
+                int idx = click_y / item_h;
+                if (idx >= 0 && idx < total_presets) {
+                    if (idx < NUM_FIXED_PRESETS) {
+                        editor->paint_coll_attr = coll_presets[idx].attr;
+                    } else {
+                        editor->paint_coll_attr = editor->sampled_coll_attr;
+                    }
+                }
+            }
+        }
+    } else if (editor->current_tool == TOOL_TILE_PAINT) {
+        /* === Tile Paint Sidebar === */
+        int tile_row_h = 7 * s;
+        int tile_content_h = 16 * s + 2 * (tile_row_h + 2) + 6 + tile_row_h + 4 +
+            14 * tile_row_h + 30 + 2 * tile_row_h;
+        int tile_y_offset = (win_h - tile_content_h) / 2;
+        if (tile_y_offset < pad) tile_y_offset = pad;
+
+        draw_text_s(sdl_r, sx + pad, tile_y_offset, "TILE PAINT", COL_TEXT_WHITE, s);
+        draw_text_s(sdl_r, sx + pad, tile_y_offset + 7 * s, tool_name, 0xFFFF80FF, s);
+
+        int y = tile_y_offset + 16 * s;
+        int row_h = 7 * s;
+
+        /* Current tile info */
+        char tbuf[32];
+        snprintf(tbuf, sizeof(tbuf), "Tile: %d (0x%02X)", editor->paint_tile_index, editor->paint_tile_index);
+        draw_text_s(sdl_r, sx + pad, y, tbuf, COL_TEXT_WHITE, s);
+        y += row_h + 2;
+        snprintf(tbuf, sizeof(tbuf), "Palette: %d", editor->paint_tile_palette);
+        draw_text_s(sdl_r, sx + pad, y, tbuf, COL_TEXT_WHITE, s);
+        y += row_h + 6;
+
+        /* Separator */
+        draw_line(sdl_r, sx + 4, y, sx + sidebar_w - 4, y, 0x606060FF);
+        y += 6;
+
+        /* Tile import info panel */
+        draw_text_s(sdl_r, sx + pad, y, "=== TILE IMPORT ===", 0x80C0FFFF, s);
+        y += row_h + 4;
+        draw_text_s(sdl_r, sx + pad, y, "Place PNGs in table's", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "data/ folder:", COL_TEXT_DIM, s);
+        y += row_h + 2;
+        draw_text_s(sdl_r, sx + pad + 4 * s, y, "top_tiles.png", 0x80FF80FF, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad + 4 * s, y, "bottom_tiles.png", 0x80FF80FF, s);
+        y += row_h + 6;
+        draw_text_s(sdl_r, sx + pad, y, "Requirements:", 0xFFFF80FF, s);
+        y += row_h + 2;
+        draw_text_s(sdl_r, sx + pad, y, "- Grayscale PNG", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "  (4 shades)", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "- White=0 LGray=1", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "  DGray=2 Black=3", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "- Width: mult of 8px", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "- Max: 128x128 (256)", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "- 8x8 block = 1 tile", COL_TEXT_DIM, s);
+        y += row_h + 6;
+
+        /* Separator */
+        draw_line(sdl_r, sx + 4, y, sx + sidebar_w - 4, y, 0x606060FF);
+        y += 6;
+
+        draw_text_s(sdl_r, sx + pad, y, "View: 160x144 pixels", COL_TEXT_DIM, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "= 20x18 tiles/half", COL_TEXT_DIM, s);
+        y += row_h + 6;
+        draw_text_s(sdl_r, sx + pad, y, "R: Reload tiles", 0x80C0FFFF, s);
+        y += row_h;
+        draw_text_s(sdl_r, sx + pad, y, "[/]: Change tile", 0x808080FF, s);
+    } else {
+        /* === Component List Sidebar === */
+        int comp_count_display = COMP_COUNT - 1;  /* exclude COMP_NONE */
+        int comp_content_h = 16 * s + comp_count_display * item_h + 6 + item_h;
+        int comp_y_offset = (win_h - comp_content_h) / 2;
+        if (comp_y_offset < pad) comp_y_offset = pad;
+
+        draw_text_s(sdl_r, sx + pad, comp_y_offset, "COMPONENTS", COL_TEXT_WHITE, s);
+        draw_text_s(sdl_r, sx + pad, comp_y_offset + 7 * s, tool_name, 0xFFFF80FF, s);
+
+        int y = comp_y_offset + 16 * s;
+        for (int i = 1; i < COMP_COUNT; i++) {
+            bool selected = (editor->palette_selection == i && editor->current_tool == TOOL_PLACE);
+            uint32_t bg = selected ? COL_SIDEBAR_SEL : COL_SIDEBAR_ITEM;
+            fill_rect(sdl_r, sx + 2, y, sidebar_w - 4, item_h - 2, bg);
+
+            /* Color swatch */
+            uint32_t swatch = (i < COMP_COUNT) ? comp_colors[i] : COL_OBJECT_BOX;
+            fill_rect(sdl_r, sx + pad, y + 2, 3 * s, item_h - 6, swatch);
+
+            /* Name */
+            draw_text_s(sdl_r, sx + pad + 4 * s, y + 2, editor_component_name(i), COL_TEXT_WHITE, s);
+
+            y += item_h;
+            if (y + item_h > win_h - 30) break;
+        }
+
+        /* Separator before "Solid Wall" shortcut */
+        y += 2;
+        draw_line(sdl_r, sx + 4, y, sx + sidebar_w - 4, y, 0x606060FF);
+        y += 4;
+
+        /* "Solid Wall" collision shortcut entry */
+        int solid_wall_y = y;
+        bool is_solid_selected = (editor->current_tool == TOOL_COLL_PAINT && editor->paint_coll_attr == 0x01);
+        uint32_t sw_bg = is_solid_selected ? COL_SIDEBAR_SEL : COL_SIDEBAR_ITEM;
+        fill_rect(sdl_r, sx + 2, y, sidebar_w - 4, item_h - 2, sw_bg);
+        fill_rect(sdl_r, sx + pad, y + 2, 3 * s, item_h - 6, 0x101010FF);
+        draw_text_s(sdl_r, sx + pad + 4 * s, y + 2, "Solid Wall", COL_TEXT_WHITE, s);
+        draw_text_s(sdl_r, sx + sidebar_w - pad - text_width_s("0x01", s), y + 2, "0x01", COL_TEXT_DIM, s);
+
+        /* Click handling for component list + Solid Wall */
+        if (editor->mouse_left_clicked && editor->mouse_x >= sx) {
+            int list_start_y = comp_y_offset + 16 * s;
+            int click_y = editor->mouse_y - list_start_y;
+
+            /* Check if clicked on Solid Wall entry */
+            if (editor->mouse_y >= solid_wall_y && editor->mouse_y < solid_wall_y + item_h) {
+                editor->current_tool = TOOL_COLL_PAINT;
+                editor->paint_coll_attr = 0x01;
+                editor->palette_selection = COMP_NONE;
+            } else if (click_y >= 0) {
+                int idx = click_y / item_h + 1;
+                if (idx >= 1 && idx < COMP_COUNT) {
+                    editor->palette_selection = (ComponentType)idx;
+                    editor->current_tool = TOOL_PLACE;
+                }
             }
         }
     }
+}
+
+/*=============================================================================
+ * Render: Fill Rectangle Preview
+ *===========================================================================*/
+
+static void render_fill_preview(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (!editor->fill_active) return;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    float world_x = editor->camera_x + (float)editor->mouse_x / editor->zoom;
+    float world_y = editor->camera_y + (float)editor->mouse_y / editor->zoom;
+    int cur_col = (int)(world_x / 8.0f);
+    int cur_row = (int)(world_y / 8.0f);
+    int max_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+    int disp_rows = editor_display_rows(editor);
+
+    int c0 = editor->fill_start_col < cur_col ? editor->fill_start_col : cur_col;
+    int c1 = editor->fill_start_col > cur_col ? editor->fill_start_col : cur_col;
+    int r0 = editor->fill_start_row < cur_row ? editor->fill_start_row : cur_row;
+    int r1 = editor->fill_start_row > cur_row ? editor->fill_start_row : cur_row;
+
+    if (c0 < 0) c0 = 0;
+    if (r0 < 0) r0 = 0;
+    if (c1 >= max_cols) c1 = max_cols - 1;
+    if (r1 >= disp_rows) r1 = disp_rows - 1;
+
+    int sx = world_to_screen_x(editor, (float)(c0 * 8));
+    int sy = world_to_screen_y(editor, (float)(r0 * 8));
+    int ex = world_to_screen_x(editor, (float)((c1 + 1) * 8));
+    int ey = world_to_screen_y(editor, (float)((r1 + 1) * 8));
+    int rw = ex - sx;
+    int rh = ey - sy;
+
+    /* Semi-transparent fill */
+    uint32_t fill_color = editor->fill_erasing ? 0xFF404040 : 0x40FF4040;
+    fill_rect(sdl_r, sx, sy, rw, rh, fill_color);
+
+    /* Double outline */
+    uint32_t outline_color = editor->fill_erasing ? 0xFF6060FF : 0x80FF80FF;
+    draw_rect_outline(sdl_r, sx, sy, rw, rh, outline_color);
+    draw_rect_outline(sdl_r, sx - 1, sy - 1, rw + 2, rh + 2, outline_color);
+
+    /* Dimensions label */
+    int s = editor->ui_scale;
+    int fill_w = c1 - c0 + 1;
+    int fill_h = r1 - r0 + 1;
+    char dim[16];
+    snprintf(dim, sizeof(dim), "%dx%d", fill_w, fill_h);
+    int tw = text_width_s(dim, s);
+    int label_x = sx + (rw - tw) / 2;
+    int label_y = sy - 8 * s;
+    if (label_y < 0) label_y = ey + 2;
+    draw_text_s(sdl_r, label_x, label_y, dim, COL_TEXT_WHITE, s);
+}
+
+/*=============================================================================
+ * Render: Table Readiness Checklist
+ *===========================================================================*/
+
+static void render_checklist(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
+    if (!editor->show_checklist) return;
+
+    int s = editor->ui_scale;
+    int row_h = 7 * s + 2;
+    int pad = 6;
+    int panel_w = SIDEBAR_BASE_W;
+    int panel_x = pad;
+    int panel_y = 12 * s;
+
+    int disp_rows = editor_display_rows(editor);
+    int max_cols = editor->table.tilemap_cols > 0 ? editor->table.tilemap_cols : 32;
+    bool has_flippers = editor->table.has_flippers;
+
+    /* --- Perform checks --- */
+    typedef struct { const char *label; bool pass; bool visible; } CheckItem;
+    CheckItem checks[8];
+    int num_checks = 0;
+
+    /* Count collision attributes in various ranges */
+    int left_flipper_count = 0;
+    int right_flipper_count = 0;
+    int drain_count = 0;
+    int drain_total = 0;
+    int perimeter_nonzero = 0;
+    int perimeter_total = 0;
+    int total_tiles = 0;
+    int nonzero_tiles = 0;
+
+    for (int r = 0; r < disp_rows; r++) {
+        int dr = editor_display_to_data_row(editor, r);
+        if (dr < 0 || dr >= 64) continue;
+        for (int c = 0; c < max_cols; c++) {
+            uint8_t attr = editor->table.collision_map[dr][c];
+            total_tiles++;
+            if (attr != 0) nonzero_tiles++;
+
+            /* Left flipper zones (0xE0-0xEF) */
+            if (attr >= 0xE0 && attr <= 0xEF) left_flipper_count++;
+            /* Right flipper zones (0xF0-0xFE) */
+            if (attr >= 0xF0 && attr <= 0xFE) right_flipper_count++;
+
+            /* Bottom 2 rows drain check */
+            if (r >= disp_rows - 2) {
+                drain_total++;
+                if (attr == 0xFF) drain_count++;
+            }
+
+            /* Perimeter check (top row, bottom row, left col, right col) */
+            if (r == 0 || r == disp_rows - 1 || c == 0 || c == max_cols - 1) {
+                perimeter_total++;
+                if (attr != 0) perimeter_nonzero++;
+            }
+        }
+    }
+
+    /* Check objects */
+    bool has_launch_alley = false;
+    bool has_bumper = false;
+    bool has_slot_machine = false;
+    for (int i = 0; i < editor->table.num_objects; i++) {
+        if (editor->table.objects[i].type == COMP_LAUNCH_ALLEY) has_launch_alley = true;
+        if (editor->table.objects[i].type == COMP_BUMPER) has_bumper = true;
+        if (editor->table.objects[i].type == COMP_SLOT_MACHINE) has_slot_machine = true;
+    }
+
+    /* Build check list */
+    if (has_flippers) {
+        checks[num_checks++] = (CheckItem){ "L Flipper zones >=8", left_flipper_count >= 8, true };
+        checks[num_checks++] = (CheckItem){ "R Flipper zones >=8", right_flipper_count >= 8, true };
+        checks[num_checks++] = (CheckItem){ "Drain zone (bottom)", drain_total > 0 && drain_count > drain_total / 2, true };
+    }
+    checks[num_checks++] = (CheckItem){ "Outer walls >50%", perimeter_total > 0 && perimeter_nonzero > perimeter_total / 2, true };
+    if (has_flippers) {
+        checks[num_checks++] = (CheckItem){ "Launch alley obj", has_launch_alley, true };
+    }
+    checks[num_checks++] = (CheckItem){ "At least 1 bumper", has_bumper, true };
+    checks[num_checks++] = (CheckItem){ "Slot machine obj", has_slot_machine, true };
+
+    /* Panel size */
+    int panel_h = (num_checks + 3) * row_h + pad * 3;  /* +3 for title, separator, coverage */
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    fill_rect(sdl_r, panel_x, panel_y, panel_w, panel_h, 0x1A1A1AE8);
+    draw_rect_outline(sdl_r, panel_x, panel_y, panel_w, panel_h, 0x606060FF);
+
+    int y = panel_y + pad;
+
+    /* Title */
+    draw_text_s(sdl_r, panel_x + pad, y, "TABLE CHECKLIST", 0xFFFF80FF, s);
+    y += row_h + 2;
+
+    /* Check items */
+    for (int i = 0; i < num_checks; i++) {
+        const char *icon = checks[i].pass ? "[OK]" : "[!!]";
+        uint32_t icon_color = checks[i].pass ? 0x40FF40FF : 0xFF4040FF;
+        draw_text_s(sdl_r, panel_x + pad, y, icon, icon_color, s);
+        draw_text_s(sdl_r, panel_x + pad + text_width_s("[OK] ", s), y,
+                    checks[i].label, COL_TEXT_WHITE, s);
+        y += row_h;
+    }
+
+    /* Separator */
+    y += 2;
+    draw_line(sdl_r, panel_x + 4, y, panel_x + panel_w - 4, y, 0x606060FF);
+    y += 4;
+
+    /* Coverage stat */
+    int pct = total_tiles > 0 ? (nonzero_tiles * 100 / total_tiles) : 0;
+    char cov[48];
+    snprintf(cov, sizeof(cov), "Coverage: %d%% (%d/%d)", pct, nonzero_tiles, total_tiles);
+    draw_text_s(sdl_r, panel_x + pad, y, cov, COL_TEXT_DIM, s);
 }
 
 /*=============================================================================
@@ -804,7 +1419,7 @@ static void render_inspector(EditorState *editor, SDL_Renderer *sdl_r, int win_w
     int s = editor->ui_scale;
     int row_h = 7 * s + 2;
     int pad = 4;
-    int iw = 200;
+    int iw = SIDEBAR_BASE_W;
     int ix = 0;
     int iy = 8 * s;
     int label_x = ix + pad;
@@ -898,7 +1513,7 @@ static void render_collision_inspector(EditorState *editor, SDL_Renderer *sdl_r,
     int s = editor->ui_scale;
     int row_h = 7 * s + 2;
     int pad = 4;
-    int iw = 200;
+    int iw = SIDEBAR_BASE_W;
     int ix = 0;
     int iy = 8 * s;
     int label_x = ix + pad;
@@ -956,66 +1571,59 @@ static void render_collision_inspector(EditorState *editor, SDL_Renderer *sdl_r,
 
 static void render_status_bar(EditorState *editor, SDL_Renderer *sdl_r, int win_w, int win_h) {
     int s = editor->ui_scale;
-    int bar_h = 8 * s;
+    int bar_h = 7 * s + 6;
     int bar_y = win_h - bar_h;
-    int sidebar_w = SIDEBAR_BASE_W;
 
     fill_rect(sdl_r, 0, bar_y, win_w, bar_h, 0x181818FF);
 
-    char buf[128];
+    /* Left side: context info */
+    char buf[64];
     if (editor->current_tool == TOOL_TILE_PAINT) {
-        snprintf(buf, sizeof(buf), "TILE: idx=%d pal=%d  [/]change  Zoom:%.1fx",
-                 editor->paint_tile_index, editor->paint_tile_palette, editor->zoom);
+        snprintf(buf, sizeof(buf), "TILE:%d P:%d",
+                 editor->paint_tile_index, editor->paint_tile_palette);
     } else if (editor->current_tool == TOOL_COLL_PAINT) {
-        snprintf(buf, sizeof(buf), "COLL: attr=0x%02X  0-9 change  Zoom:%.1fx",
-                 editor->paint_coll_attr, editor->zoom);
-    } else if (editor->combined_view) {
-        snprintf(buf, sizeof(buf), "Top:0x%02X Bot:0x%02X SCX:%d Objs:%d Zoom:%.1fx%s",
-                 editor->top_stage_id, editor->bottom_stage_id,
-                 editor->table.default_scx, editor->table.num_objects, editor->zoom,
-                 editor->hide_buffer_rows ? "" : " [full]");
+        snprintf(buf, sizeof(buf), "COLL:0x%02X", editor->paint_coll_attr);
     } else {
-        snprintf(buf, sizeof(buf), "Stage:0x%02X Objs:%d Zoom:%.1fx",
-                 editor->table.stage_id, editor->table.num_objects, editor->zoom);
+        snprintf(buf, sizeof(buf), "Objs:%d", editor->table.num_objects);
     }
-    draw_text_s(sdl_r, 4, bar_y + s, buf, COL_TEXT_WHITE, s);
+    draw_text_s(sdl_r, 4, bar_y + 3, buf, COL_TEXT_WHITE, s);
 
-    /* Mouse world position */
+    /* Right side: coords + zoom + status */
     float world_x = editor->camera_x + (float)editor->mouse_x / editor->zoom;
     float world_y = editor->camera_y + (float)editor->mouse_y / editor->zoom;
-    snprintf(buf, sizeof(buf), "(%d,%d)", (int)world_x, (int)world_y);
-    draw_text_s(sdl_r, win_w - sidebar_w - text_width_s(buf, s) - 4, bar_y + s, buf, COL_TEXT_WHITE, s);
+    snprintf(buf, sizeof(buf), "%.0fx (%d,%d)", editor->zoom, (int)world_x, (int)world_y);
+    draw_text_s(sdl_r, win_w - text_width_s(buf, s) - 4, bar_y + 3, buf, COL_TEXT_WHITE, s);
 
-    /* Save flash indicator */
+    /* Save flash / dirty indicator (center area) */
     if (editor->save_flash_timer > 0) {
-        /* Flash green "SAVED!" prominently */
         uint32_t flash_col = (editor->save_flash_timer % 20 < 15) ? 0x40FF40FF : 0x80FFA0FF;
-        draw_text_s(sdl_r, win_w - sidebar_w - text_width_s("SAVED!", s) - text_width_s(buf, s) - 16,
-                    bar_y + s, "SAVED!", flash_col, s);
+        int cx = (win_w - text_width_s("SAVED!", s)) / 2;
+        draw_text_s(sdl_r, cx, bar_y + 3, "SAVED!", flash_col, s);
     } else if (editor->table.dirty) {
-        /* Dirty indicator */
-        draw_text_s(sdl_r, win_w - sidebar_w - text_width_s("[MOD]", s) - text_width_s(buf, s) - 12,
-                    bar_y + s, "[MOD]", 0xFF8080FF, s);
+        int cx = (win_w - text_width_s("[MOD]", s)) / 2;
+        draw_text_s(sdl_r, cx, bar_y + 3, "[MOD]", 0xFF8080FF, s);
     }
 }
 
 /*=============================================================================
- * Render: Help Bar — scaled
+ * Render: Help Bar — scaled (full UI_SCALE size)
  *===========================================================================*/
 
 static void render_help_bar(EditorState *editor, SDL_Renderer *sdl_r, int win_w) {
     int s = editor->ui_scale;
-    int bar_h = 7 * s + 2;
-    int sidebar_w = SIDEBAR_BASE_W;
+    int bar_h = 7 * s + 6;
 
-    fill_rect(sdl_r, 0, 0, win_w - sidebar_w, bar_h, 0x181818E0);
-    if (editor->show_collision_overlay && editor->current_tool == TOOL_SELECT) {
-        draw_text_s(sdl_r, 4, s,
-            "^S:Save ^Z:Undo F5:Play  Hover:Info Click:Select Drag:Move",
+    fill_rect(sdl_r, 0, 0, win_w, bar_h, 0x181818E0);
+
+    /* Two rows of hints at full scale, stacked if needed */
+    if (editor->current_tool == TOOL_PALETTE) {
+        draw_text_s(sdl_r, 4, 3, "^S:Save  Arrows:Edit  Tab:Scope",
+            0xA0A0A0FF, s);
+    } else if (editor->current_tool == TOOL_COLL_PAINT) {
+        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  Alt:Sample",
             0xA0A0A0FF, s);
     } else {
-        draw_text_s(sdl_r, 4, s,
-            "^S:Save ^Z:Undo F5:Play G:Grid C:Coll B:Bounds H:Buf S:Sel P:Place T:Tile X:Coll",
+        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  L:Pal",
             0xA0A0A0FF, s);
     }
 }
@@ -1063,28 +1671,38 @@ static void render_picker_screen(EditorState *editor, SDL_Renderer *sdl_r, int w
         if (iy + item_h > win_h - pad) break;
 
         bool selected = (i == editor->picker_cursor);
+        bool is_new_table = (entry->folder[0] == '\0');  /* [+ New Table] entry */
 
         /* Background bar */
         uint32_t bg = selected ? COL_PICKER_SEL : COL_PICKER_ITEM;
+        if (is_new_table) bg = selected ? 0x205020FF : 0x183018FF;  /* Green tinted */
         fill_rect(sdl_r, list_x, iy, list_w, item_h - 2 * s, bg);
 
         /* Selection indicator */
         if (selected) {
-            fill_rect(sdl_r, list_x, iy, 3 * s, item_h - 2 * s, COL_PICKER_TITLE);
+            uint32_t indicator_col = is_new_table ? 0x40FF40FF : COL_PICKER_TITLE;
+            fill_rect(sdl_r, list_x, iy, 3 * s, item_h - 2 * s, indicator_col);
         }
 
         /* Table name */
         int text_x = list_x + 5 * s;
         int text_y = iy + 2 * s;
-        draw_text_s(sdl_r, text_x, text_y, entry->name,
-                    selected ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+        uint32_t name_color;
+        if (is_new_table) {
+            name_color = selected ? 0x80FF80FF : 0x40C040FF;  /* Green text */
+        } else {
+            name_color = selected ? COL_TEXT_WHITE : COL_TEXT_DIM;
+        }
+        draw_text_s(sdl_r, text_x, text_y, entry->name, name_color, s);
 
-        /* Folder name (dimmer) */
-        char folder_str[80];
-        snprintf(folder_str, sizeof(folder_str), "(%s%s)",
-                 entry->folder_name, entry->is_builtin ? " - builtin" : "");
-        draw_text_s(sdl_r, text_x + text_width_s(entry->name, s) + 4 * s, text_y,
-                    folder_str, 0x606060FF, s);
+        /* Folder name (dimmer) — skip for [+ New Table] */
+        if (!is_new_table) {
+            char folder_str[80];
+            snprintf(folder_str, sizeof(folder_str), "(%s%s)",
+                     entry->folder_name, entry->is_builtin ? " - builtin" : "");
+            draw_text_s(sdl_r, text_x + text_width_s(entry->name, s) + 4 * s, text_y,
+                        folder_str, 0x606060FF, s);
+        }
     }
 
     /* Footer */
@@ -1135,7 +1753,9 @@ void editor_render_viewport(EditorState *editor, Renderer *renderer, Platform *p
 
     /* Render layers */
     render_tilemap_preview(editor, sdl_r, editor->vram_ref, editor->table.bg_palettes);
+    render_palette_highlight(editor, sdl_r);
     render_collision_overlay(editor, sdl_r);
+    render_fill_preview(editor, sdl_r);
     render_viewport_indicators(editor, sdl_r);
     render_grid(editor, sdl_r);
     render_objects(editor, sdl_r);
@@ -1145,6 +1765,7 @@ void editor_render_viewport(EditorState *editor, Renderer *renderer, Platform *p
     render_sidebar(editor, sdl_r, win_w, win_h);
     render_inspector(editor, sdl_r, win_w, win_h);
     render_collision_inspector(editor, sdl_r, win_w, win_h);
+    render_checklist(editor, sdl_r, win_w, win_h);
     render_collision_tooltip(editor, sdl_r);
     render_status_bar(editor, sdl_r, win_w, win_h);
     render_help_bar(editor, sdl_r, win_w);

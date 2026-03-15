@@ -41,6 +41,25 @@ static bool write_file(const char *path, const char *content) {
 }
 
 /*=============================================================================
+ * Helper: write binary data to file
+ *===========================================================================*/
+static bool write_binary_file(const char *path, const uint8_t *data, size_t size) {
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        printf("[EDITOR] Failed to write binary: %s\n", path);
+        return false;
+    }
+    size_t written = fwrite(data, 1, size, f);
+    fclose(f);
+    if (written != size) {
+        printf("[EDITOR] Short write on binary: %s (%zu/%zu)\n", path, written, size);
+        return false;
+    }
+    printf("[EDITOR] Wrote binary: %s (%zu bytes)\n", path, size);
+    return true;
+}
+
+/*=============================================================================
  * Component Lua code-name (for variable naming)
  *===========================================================================*/
 static const char *comp_lua_name(ComponentType type) {
@@ -70,7 +89,7 @@ static bool generate_manifest(EditorTable *table, const char *dir) {
     char path[512];
     snprintf(path, sizeof(path), "%s/manifest.json", dir);
 
-    char buf[2048];
+    char buf[4096];
     snprintf(buf, sizeof(buf),
         "{\n"
         "    \"name\": \"%s\",\n"
@@ -89,6 +108,16 @@ static bool generate_manifest(EditorTable *table, const char *dir) {
         "        \"evolution\": \"scripts/evolution.lua\",\n"
         "        \"map_move\": \"scripts/map_move.lua\",\n"
         "        \"billboard\": \"scripts/billboard.lua\"\n"
+        "    },\n"
+        "    \"data\": {\n"
+        "        \"collision_top\": \"data/top.collision\",\n"
+        "        \"collision_bottom\": \"data/bottom.collision\",\n"
+        "        \"tilemap_top\": \"data/top.map\",\n"
+        "        \"tilemap_top_attr\": \"data/top.attr\",\n"
+        "        \"tilemap_bottom\": \"data/bottom.map\",\n"
+        "        \"tilemap_bottom_attr\": \"data/bottom.attr\",\n"
+        "        \"tileset_top\": \"data/top_tiles.png\",\n"
+        "        \"tileset_bottom\": \"data/bottom_tiles.png\"\n"
         "    }\n"
         "}\n",
         table->name,
@@ -360,6 +389,146 @@ static bool generate_template_script(const char *dir, const char *filename, cons
 }
 
 /*=============================================================================
+ * Serialize: Collision Maps (binary)
+ *
+ * Writes two 1024-byte .collision files (32 rows x 32 cols) per stage half.
+ * On-disk format has +3 row offset: rows 0-2 are above-screen padding (0x01),
+ * rows 3-20 are visible tilemap rows, rows 21-31 are padding (0x00).
+ *===========================================================================*/
+
+bool editor_serialize_collision(EditorState *editor, const char *output_path) {
+    if (!editor || !output_path) return false;
+
+    char data_dir[512];
+    snprintf(data_dir, sizeof(data_dir), "%s/data", output_path);
+    ensure_dir(data_dir);
+
+    uint8_t buf[1024];  /* 32 rows x 32 cols */
+    bool ok = true;
+
+    /* Top half: editor display rows 0-17 → disk rows 3-20 */
+    memset(buf, 0, sizeof(buf));
+    /* Rows 0-2: above-screen solid padding */
+    for (int c = 0; c < 32; c++) {
+        buf[0 * 32 + c] = 0x01;
+        buf[1 * 32 + c] = 0x01;
+        buf[2 * 32 + c] = 0x01;
+    }
+    /* Rows 3-20: visible area from editor */
+    for (int r = 0; r < 18; r++) {
+        int data_row = editor_display_to_data_row(editor, r);
+        if (data_row >= 0 && data_row < 64) {
+            for (int c = 0; c < 32; c++) {
+                buf[(r + 3) * 32 + c] = editor->table.collision_map[data_row][c];
+            }
+        }
+    }
+    char path[512];
+    snprintf(path, sizeof(path), "%s/data/top.collision", output_path);
+    ok = ok && write_binary_file(path, buf, sizeof(buf));
+
+    /* Bottom half: editor display rows 18-35 → disk rows 3-20 */
+    memset(buf, 0, sizeof(buf));
+    for (int c = 0; c < 32; c++) {
+        buf[0 * 32 + c] = 0x01;
+        buf[1 * 32 + c] = 0x01;
+        buf[2 * 32 + c] = 0x01;
+    }
+    for (int r = 0; r < 18; r++) {
+        int display_row = r + 18;  /* Bottom half display rows */
+        int data_row = editor_display_to_data_row(editor, display_row);
+        if (data_row >= 0 && data_row < 64) {
+            for (int c = 0; c < 32; c++) {
+                buf[(r + 3) * 32 + c] = editor->table.collision_map[data_row][c];
+            }
+        }
+    }
+    snprintf(path, sizeof(path), "%s/data/bottom.collision", output_path);
+    ok = ok && write_binary_file(path, buf, sizeof(buf));
+
+    return ok;
+}
+
+/*=============================================================================
+ * Serialize: Tilemaps (binary)
+ *
+ * Writes four 1024-byte files per stage half:
+ *   data/top.map + data/top.attr (tile indices + attributes)
+ *   data/bottom.map + data/bottom.attr
+ *===========================================================================*/
+
+bool editor_serialize_tilemaps(EditorState *editor, const char *output_path) {
+    if (!editor || !output_path) return false;
+
+    char data_dir[512];
+    snprintf(data_dir, sizeof(data_dir), "%s/data", output_path);
+    ensure_dir(data_dir);
+
+    uint8_t map_buf[1024];   /* 32 rows x 32 cols */
+    uint8_t attr_buf[1024];
+    bool ok = true;
+    char path[512];
+
+    /* Top half: editor data rows 0-31 */
+    memset(map_buf, 0, sizeof(map_buf));
+    memset(attr_buf, 0, sizeof(attr_buf));
+    for (int r = 0; r < 32; r++) {
+        for (int c = 0; c < 32; c++) {
+            map_buf[r * 32 + c] = editor->table.tilemap[r][c];
+            attr_buf[r * 32 + c] = editor->table.tilemap_attrs[r][c];
+        }
+    }
+    snprintf(path, sizeof(path), "%s/data/top.map", output_path);
+    ok = ok && write_binary_file(path, map_buf, sizeof(map_buf));
+    snprintf(path, sizeof(path), "%s/data/top.attr", output_path);
+    ok = ok && write_binary_file(path, attr_buf, sizeof(attr_buf));
+
+    /* Bottom half: editor data rows 32-63 */
+    memset(map_buf, 0, sizeof(map_buf));
+    memset(attr_buf, 0, sizeof(attr_buf));
+    for (int r = 0; r < 32; r++) {
+        for (int c = 0; c < 32; c++) {
+            map_buf[r * 32 + c] = editor->table.tilemap[r + 32][c];
+            attr_buf[r * 32 + c] = editor->table.tilemap_attrs[r + 32][c];
+        }
+    }
+    snprintf(path, sizeof(path), "%s/data/bottom.map", output_path);
+    ok = ok && write_binary_file(path, map_buf, sizeof(map_buf));
+    snprintf(path, sizeof(path), "%s/data/bottom.attr", output_path);
+    ok = ok && write_binary_file(path, attr_buf, sizeof(attr_buf));
+
+    return ok;
+}
+
+/*=============================================================================
+ * Serialize: Palettes (binary)
+ *
+ * Writes data/palettes.bin: 128 bytes = 8 palettes x 4 colors x 2 bytes (LE).
+ *===========================================================================*/
+
+bool editor_serialize_palettes(EditorState *editor, const char *output_path) {
+    if (!editor || !output_path) return false;
+
+    char data_dir[512];
+    snprintf(data_dir, sizeof(data_dir), "%s/data", output_path);
+    ensure_dir(data_dir);
+
+    uint8_t buf[128];
+    for (int p = 0; p < 8; p++) {
+        for (int c = 0; c < 4; c++) {
+            uint16_t val = editor->table.bg_palettes[p].colors[c];
+            int idx = (p * 4 + c) * 2;
+            buf[idx]     = val & 0xFF;         /* Low byte */
+            buf[idx + 1] = (val >> 8) & 0xFF;  /* High byte */
+        }
+    }
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/data/palettes.bin", output_path);
+    return write_binary_file(path, buf, sizeof(buf));
+}
+
+/*=============================================================================
  * Main Serialization Entry Point
  *===========================================================================*/
 
@@ -368,10 +537,12 @@ bool editor_serialize_table(EditorState *editor, const char *output_path) {
     EditorTable *table = &editor->table;
 
     /* Create directory structure */
-    char scripts_dir[512];
+    char scripts_dir[512], data_dir[512];
     snprintf(scripts_dir, sizeof(scripts_dir), "%s/scripts", output_path);
+    snprintf(data_dir, sizeof(data_dir), "%s/data", output_path);
     ensure_dir(output_path);
     ensure_dir(scripts_dir);
+    ensure_dir(data_dir);
 
     bool ok = true;
     ok = ok && generate_manifest(table, output_path);
@@ -383,6 +554,11 @@ bool editor_serialize_table(EditorState *editor, const char *output_path) {
     ok = ok && generate_template_script(output_path, "evolution.lua", "on_evolution_update");
     ok = ok && generate_template_script(output_path, "map_move.lua", "on_map_move_update");
     ok = ok && generate_template_script(output_path, "billboard.lua", "on_billboard_update");
+
+    /* Serialize binary data (collision maps + tilemaps + palettes) */
+    ok = ok && editor_serialize_collision(editor, output_path);
+    ok = ok && editor_serialize_tilemaps(editor, output_path);
+    ok = ok && editor_serialize_palettes(editor, output_path);
 
     if (ok) {
         table->dirty = false;

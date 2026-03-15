@@ -15,12 +15,14 @@
 #include "game/billboard.h"
 #include "audio/audio.h"
 #include "renderer/stage_assets.h"
+#include "renderer/tile_loader.h"
 #include "cJSON.h"
 #include <SDL.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <sys/stat.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -230,8 +232,19 @@ void editor_scan_tables(EditorState *editor) {
     FindClose(hFind);
 #endif
 
+    /* Add [+ New Table] entry at the end */
+    if (editor->picker_num_tables < MAX_PICKER_TABLES) {
+        PickerEntry *entry = &editor->picker_tables[editor->picker_num_tables];
+        strncpy(entry->name, "[+ New Table]", sizeof(entry->name) - 1);
+        entry->folder[0] = '\0';
+        entry->folder_name[0] = '\0';
+        entry->is_builtin = false;
+        editor->picker_num_tables++;
+    }
+
     editor->picker_scanned = true;
-    printf("[EDITOR] Scan complete: %d tables found\n", editor->picker_num_tables);
+    printf("[EDITOR] Scan complete: %d tables found (including New Table option)\n",
+           editor->picker_num_tables);
 }
 
 /*=============================================================================
@@ -417,6 +430,9 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
     editor->undo_count = 0;
     editor->undo_pushed_this_stroke = false;
 
+    /* Load any persisted custom data (collision, tilemaps, tilesets) */
+    editor_load_custom_data(editor);
+
     printf("[EDITOR] Opened table: %s (folder: %s)\n", entry->name, entry->folder_name);
 }
 
@@ -443,6 +459,9 @@ void editor_enter(EditorState *editor, GameState *state) {
     /* Scan for available tables */
     editor->picker_scanned = false;
     editor_scan_tables(editor);
+
+    /* Stop all music/SFX when entering editor */
+    audio_stop_all(state->audio);
 
     /* Start at the picker screen */
     editor->screen = EDITOR_SCREEN_PICKER;
@@ -551,6 +570,379 @@ void editor_import_current_stage(EditorState *editor, GameState *state) {
 }
 
 /*=============================================================================
+ * Load Custom Data (collision, tilemaps, tilesets) from table's data/ folder
+ *===========================================================================*/
+
+void editor_load_custom_data(EditorState *editor) {
+    if (!editor || !editor->table.source_folder[0]) return;
+
+    char path[512];
+    FILE *f;
+
+    /* --- Collision: data/top.collision and data/bottom.collision --- */
+    snprintf(path, sizeof(path), "%s/data/top.collision", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            /* Reverse the +3 offset: disk row 3 → display row 0 */
+            for (int r = 0; r < 18; r++) {
+                for (int c = 0; c < 32; c++) {
+                    editor->table.collision_map[r][c] = buf[(r + 3) * 32 + c];
+                }
+            }
+            printf("[EDITOR] Loaded custom collision: top (%zu bytes)\n", n);
+        }
+    }
+
+    snprintf(path, sizeof(path), "%s/data/bottom.collision", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            for (int r = 0; r < 18; r++) {
+                int data_row = r + 32;  /* Bottom half starts at data row 32 */
+                for (int c = 0; c < 32; c++) {
+                    editor->table.collision_map[data_row][c] = buf[(r + 3) * 32 + c];
+                }
+            }
+            printf("[EDITOR] Loaded custom collision: bottom (%zu bytes)\n", n);
+        }
+    }
+
+    /* --- Tilemaps: data/top.map + .attr, data/bottom.map + .attr --- */
+    snprintf(path, sizeof(path), "%s/data/top.map", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            for (int r = 0; r < 32; r++)
+                for (int c = 0; c < 32; c++)
+                    editor->table.tilemap[r][c] = buf[r * 32 + c];
+            printf("[EDITOR] Loaded custom tilemap: top\n");
+        }
+    }
+    snprintf(path, sizeof(path), "%s/data/top.attr", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            for (int r = 0; r < 32; r++)
+                for (int c = 0; c < 32; c++)
+                    editor->table.tilemap_attrs[r][c] = buf[r * 32 + c];
+        }
+    }
+
+    snprintf(path, sizeof(path), "%s/data/bottom.map", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            for (int r = 0; r < 32; r++)
+                for (int c = 0; c < 32; c++)
+                    editor->table.tilemap[r + 32][c] = buf[r * 32 + c];
+            printf("[EDITOR] Loaded custom tilemap: bottom\n");
+        }
+    }
+    snprintf(path, sizeof(path), "%s/data/bottom.attr", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 1024) {
+            for (int r = 0; r < 32; r++)
+                for (int c = 0; c < 32; c++)
+                    editor->table.tilemap_attrs[r + 32][c] = buf[r * 32 + c];
+        }
+    }
+
+    /* --- Palettes: data/palettes.bin (128 bytes = 8 palettes x 4 colors x 2 bytes) --- */
+    snprintf(path, sizeof(path), "%s/data/palettes.bin", editor->table.source_folder);
+    f = fopen(path, "rb");
+    if (f) {
+        uint8_t buf[128];
+        size_t n = fread(buf, 1, sizeof(buf), f);
+        fclose(f);
+        if (n >= 128) {
+            for (int p = 0; p < 8; p++) {
+                for (int c = 0; c < 4; c++) {
+                    uint16_t val = buf[(p * 4 + c) * 2] | (buf[(p * 4 + c) * 2 + 1] << 8);
+                    editor->table.bg_palettes[p].colors[c] = val;
+                    editor->palettes_top[p].colors[c] = val;
+                    editor->palettes_bottom[p].colors[c] = val;
+                }
+            }
+            printf("[EDITOR] Loaded custom palettes (128 bytes)\n");
+        }
+    }
+
+    /* --- Tilesets: data/top_tiles.png and data/bottom_tiles.png --- */
+    editor->has_custom_tiles_top = false;
+    editor->has_custom_tiles_bottom = false;
+
+    snprintf(path, sizeof(path), "%s/data/top_tiles.png", editor->table.source_folder);
+    {
+        size_t tile_size = 0;
+        uint8_t *tile_data = tiles_from_png(path, &tile_size);
+        if (tile_data && tile_size > 0) {
+            size_t copy_size = tile_size < 6144 ? tile_size : 6144;
+            memcpy(editor->vram_top[0], tile_data, copy_size);
+            editor->has_custom_tiles_top = true;
+            printf("[EDITOR] Loaded custom tileset: top (%zu bytes)\n", tile_size);
+        }
+        free(tile_data);
+    }
+
+    snprintf(path, sizeof(path), "%s/data/bottom_tiles.png", editor->table.source_folder);
+    {
+        size_t tile_size = 0;
+        uint8_t *tile_data = tiles_from_png(path, &tile_size);
+        if (tile_data && tile_size > 0) {
+            size_t copy_size = tile_size < 6144 ? tile_size : 6144;
+            memcpy(editor->vram_bottom[0], tile_data, copy_size);
+            editor->has_custom_tiles_bottom = true;
+            printf("[EDITOR] Loaded custom tileset: bottom (%zu bytes)\n", tile_size);
+        }
+        free(tile_data);
+    }
+}
+
+/*=============================================================================
+ * Create New Blank Table
+ *===========================================================================*/
+
+void editor_create_new_table(EditorState *editor, GameState *state) {
+    if (!editor) return;
+
+    /* Auto-generate name: custom_table_1, custom_table_2, etc. */
+    char folder_name[64];
+    char folder_path[512];
+    int suffix = 1;
+    while (suffix < 100) {
+        snprintf(folder_name, sizeof(folder_name), "custom_table_%d", suffix);
+        snprintf(folder_path, sizeof(folder_path), "%stables/%s",
+                 editor->asset_base_path, folder_name);
+        struct stat st;
+        if (stat(folder_path, &st) != 0) break;  /* Folder doesn't exist, use this name */
+        suffix++;
+    }
+
+    /* Create directory structure */
+    char scripts_dir[512], data_dir[512];
+    snprintf(scripts_dir, sizeof(scripts_dir), "%s/scripts", folder_path);
+    snprintf(data_dir, sizeof(data_dir), "%s/data", folder_path);
+
+    #ifdef _WIN32
+    _mkdir(folder_path);
+    _mkdir(scripts_dir);
+    _mkdir(data_dir);
+    #else
+    mkdir(folder_path, 0755);
+    mkdir(scripts_dir, 0755);
+    mkdir(data_dir, 0755);
+    #endif
+
+    /* Initialize editor table */
+    memset(&editor->table, 0, sizeof(EditorTable));
+    snprintf(editor->table.name, sizeof(editor->table.name), "Custom Table %d", suffix);
+    strncpy(editor->table.source_folder, folder_path, sizeof(editor->table.source_folder) - 1);
+    editor->table.stage_id = 0x01;  /* Red field bottom (odd = flippers) */
+    editor->table.has_flippers = true;
+    editor->table.tilemap_rows = 64;
+    editor->table.tilemap_cols = 32;
+    editor->table.unsigned_addressing = false;
+    editor->table.has_vram = false;  /* No VRAM tiles yet */
+    editor->table.default_scx = 0x20;  /* Standard bottom stage offset */
+
+    /* Set up combined view */
+    editor->combined_view = true;
+    editor->hide_buffer_rows = true;
+    editor->top_stage_id = 0x00;
+    editor->bottom_stage_id = 0x01;
+
+    /* Default palettes (grayscale) */
+    for (int p = 0; p < 8; p++) {
+        editor->table.bg_palettes[p].colors[0] = 0x7FFF;  /* White */
+        editor->table.bg_palettes[p].colors[1] = 0x5294;  /* Light gray */
+        editor->table.bg_palettes[p].colors[2] = 0x294A;  /* Dark gray */
+        editor->table.bg_palettes[p].colors[3] = 0x0000;  /* Black */
+        editor->table.obj_palettes[p] = editor->table.bg_palettes[p];
+    }
+    memcpy(editor->palettes_top, editor->table.bg_palettes, sizeof(editor->palettes_top));
+    memcpy(editor->palettes_bottom, editor->table.bg_palettes, sizeof(editor->palettes_bottom));
+
+    /* Generate template collision data.
+     * In the editor, rows 0-17 are top visible, rows 32-49 are bottom visible
+     * (display rows 0-17 and 18-35 when hide_buffer_rows is on). */
+
+    /* --- Top half (display rows 0-17, data rows 0-17) --- */
+    /* Row 0: solid top border (including launch alley cap) */
+    for (int c = 0; c < 24; c++)
+        editor->table.collision_map[0][c] = 0x01;
+
+    /* Rows 1-15: walls on sides, passable interior + launch alley channel */
+    for (int r = 1; r <= 15; r++) {
+        editor->table.collision_map[r][0] = 0x01;     /* Left wall */
+        editor->table.collision_map[r][19] = 0x01;    /* Right wall (main field) */
+        for (int c = 1; c < 19; c++)
+            editor->table.collision_map[r][c] = 0x00; /* Passable */
+        /* Launch alley channel continues through top field */
+        editor->table.collision_map[r][20] = 0x01;    /* Left alley wall */
+        editor->table.collision_map[r][21] = 0x00;    /* Alley interior */
+        editor->table.collision_map[r][22] = 0x00;    /* Alley interior */
+        editor->table.collision_map[r][23] = 0x01;    /* Right alley wall */
+    }
+
+    /* Rows 16-17: transition zone (including alley passthrough) */
+    for (int c = 0; c < 20; c++) {
+        editor->table.collision_map[16][c] = 0xFF;
+        editor->table.collision_map[17][c] = 0xFF;
+    }
+    /* Alley continues through transition zone */
+    editor->table.collision_map[16][20] = 0x01;
+    editor->table.collision_map[16][21] = 0x00;
+    editor->table.collision_map[16][22] = 0x00;
+    editor->table.collision_map[16][23] = 0x01;
+    editor->table.collision_map[17][20] = 0x01;
+    editor->table.collision_map[17][21] = 0x00;
+    editor->table.collision_map[17][22] = 0x00;
+    editor->table.collision_map[17][23] = 0x01;
+
+    /* --- Bottom half (display rows 18-35, data rows 32-49) --- */
+    /* Rows 0-1 (data 32-33): transition zone (scroll to top) + alley passthrough */
+    for (int c = 0; c < 20; c++) {
+        editor->table.collision_map[32][c] = 0xFF;
+        editor->table.collision_map[33][c] = 0xFF;
+    }
+    /* Alley continues through bottom transition zone */
+    editor->table.collision_map[32][20] = 0x01;
+    editor->table.collision_map[32][21] = 0x00;
+    editor->table.collision_map[32][22] = 0x00;
+    editor->table.collision_map[32][23] = 0x01;
+    editor->table.collision_map[33][20] = 0x01;
+    editor->table.collision_map[33][21] = 0x00;
+    editor->table.collision_map[33][22] = 0x00;
+    editor->table.collision_map[33][23] = 0x01;
+
+    /* Rows 2-11 (data 34-43): walls on sides, passable interior */
+    for (int r = 34; r <= 43; r++) {
+        editor->table.collision_map[r][0] = 0x01;
+        editor->table.collision_map[r][19] = 0x01;
+        for (int c = 1; c < 19; c++)
+            editor->table.collision_map[r][c] = 0x00;
+    }
+
+    /* Rows 12-13 (data 44-45): flipper zones */
+    for (int c = 0; c < 20; c++) {
+        if (c < 10) {
+            editor->table.collision_map[44][c] = 0xE0;  /* Left flipper */
+            editor->table.collision_map[45][c] = 0xE0;
+        } else {
+            editor->table.collision_map[44][c] = 0xF0;  /* Right flipper */
+            editor->table.collision_map[45][c] = 0xF0;
+        }
+    }
+
+    /* Rows 14-15 (data 46-47): funnel walls guiding to drain */
+    for (int c = 0; c < 20; c++) {
+        editor->table.collision_map[46][c] = 0x01;
+        editor->table.collision_map[47][c] = 0x01;
+    }
+    /* Leave center open for drain */
+    for (int c = 8; c < 12; c++) {
+        editor->table.collision_map[46][c] = 0x00;
+        editor->table.collision_map[47][c] = 0x00;
+    }
+
+    /* Rows 16-17 (data 48-49): drain zone */
+    for (int c = 0; c < 20; c++) {
+        editor->table.collision_map[48][c] = 0xFF;
+        editor->table.collision_map[49][c] = 0xFF;
+    }
+
+    /* --- Launch alley channel (cols 20-23, bottom play area) ---
+     * The ball spawns at x=0xA7 (col ~20) with SCX=0x20. The alley in the
+     * top half is already set up above. Here we fill the remaining bottom
+     * play area rows (data 34-49) that weren't covered by the transition. */
+    for (int r = 34; r <= 49; r++) {
+        editor->table.collision_map[r][20] = 0x01;  /* Left wall of alley */
+        editor->table.collision_map[r][23] = 0x01;  /* Right wall of alley */
+        editor->table.collision_map[r][21] = 0x00;  /* Interior passable */
+        editor->table.collision_map[r][22] = 0x00;
+    }
+    /* Bottom cap of alley */
+    editor->table.collision_map[49][21] = 0x01;
+    editor->table.collision_map[49][22] = 0x01;
+
+    /* --- Default objects --- */
+    editor->table.num_objects = 0;
+
+    /* Launch alley trigger (matches Red field: position 0xA8,0x98, bounds 8x8)
+     * In editor coords: x=0xA8=168, but in bottom-half display the Y needs
+     * adjustment. The ball spawns at y=0x98=152 which is row 19 in screen
+     * coords. In bottom-half editor data rows, that's data_row = 32+19 = 51,
+     * but in display coords (with hide_buffer) it's display_row = 18+19 = 37.
+     * The object world position = display_row * 8 for Y. However, objects use
+     * the game's absolute coordinate space, so place at the matching position. */
+    {
+        EditorObject *obj = &editor->table.objects[editor->table.num_objects++];
+        memset(obj, 0, sizeof(EditorObject));
+        obj->type = COMP_LAUNCH_ALLEY;
+        obj->x = 0xA8;   /* Same as Red field launch alley */
+        obj->y = 0x98;   /* Same as Red field ball spawn area */
+        editor_component_default_bbox(COMP_LAUNCH_ALLEY, &obj->x_thresh, &obj->y_thresh);
+        obj->score = editor_component_default_score(COMP_LAUNCH_ALLEY);
+        obj->bounce_force = component_defaults[COMP_LAUNCH_ALLEY].default_force;
+        obj->sfx_id = component_defaults[COMP_LAUNCH_ALLEY].default_sfx;
+    }
+
+    /* Default bumper in center of bottom play area */
+    {
+        EditorObject *obj = &editor->table.objects[editor->table.num_objects++];
+        memset(obj, 0, sizeof(EditorObject));
+        obj->type = COMP_BUMPER;
+        obj->x = 80;    /* Center of 160px visible area */
+        obj->y = 64;    /* Upper-mid area of bottom stage (game coords) */
+        editor_component_default_bbox(COMP_BUMPER, &obj->x_thresh, &obj->y_thresh);
+        obj->score = editor_component_default_score(COMP_BUMPER);
+        obj->bounce_force = component_defaults[COMP_BUMPER].default_force;
+        obj->sfx_id = component_defaults[COMP_BUMPER].default_sfx;
+    }
+
+    /* Initialize blank VRAM tile data so playtest doesn't show Red field tiles.
+     * Zero-filled tiles render as color index 0 (white/first palette color). */
+    memset(editor->vram_top, 0, sizeof(editor->vram_top));
+    memset(editor->vram_bottom, 0, sizeof(editor->vram_bottom));
+    editor->has_custom_tiles_top = true;
+    editor->has_custom_tiles_bottom = true;
+
+    /* Serialize the initial table (creates manifest + scripts + data) */
+    editor_serialize_table(editor, folder_path);
+
+    /* Set up editor state for the new table */
+    editor->vram_ref = state->vram;
+    editor->selected_object = -1;
+    editor->current_tool = TOOL_SELECT;
+    editor->screen = EDITOR_SCREEN_EDITOR;
+    editor->needs_center_view = true;
+    editor->undo_count = 0;
+    editor->undo_pushed_this_stroke = false;
+
+    printf("[EDITOR] Created new table: %s at %s\n", editor->table.name, folder_path);
+}
+
+/*=============================================================================
  * Live Playtest
  *===========================================================================*/
 
@@ -620,9 +1012,20 @@ void editor_start_playtest(EditorState *editor, GameState *state) {
     if (editor->combined_view) {
         memcpy(editor->playtest_collision_bottom,
                &editor->table.collision_map[32],
-               sizeof(editor->playtest_collision_bottom));
+               32 * 32);  /* 32 remaining rows x 32 columns */
     }
     editor->playtest_has_collision = true;
+
+    /* Flag custom tiles for VRAM injection after stage asset loading */
+    editor->playtest_has_custom_tiles =
+        (editor->has_custom_tiles_top || editor->has_custom_tiles_bottom);
+
+    /* Snapshot editor palettes for injection after stage asset loading */
+    memcpy(editor->playtest_palettes_top, editor->palettes_top,
+           sizeof(editor->playtest_palettes_top));
+    memcpy(editor->playtest_palettes_bottom, editor->palettes_bottom,
+           sizeof(editor->playtest_palettes_bottom));
+    editor->playtest_has_custom_palettes = true;
 
     /* Set game to start pinball from loading state */
     state->current_screen = 4;  /* PINBALL_GAME */
@@ -849,6 +1252,15 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         editor->current_tool = TOOL_ERASE;
         editor->palette_selection = COMP_NONE;
     }
+    if (KEY_PRESSED(SDL_SCANCODE_L)) {
+        editor->current_tool = TOOL_PALETTE;
+        editor->palette_selection = COMP_NONE;
+    }
+
+    /* Tab toggles table readiness checklist (not in palette mode where Tab cycles scope) */
+    if (KEY_PRESSED(SDL_SCANCODE_TAB) && editor->current_tool != TOOL_PALETTE) {
+        editor->show_checklist = !editor->show_checklist;
+    }
 
     /* Number keys 0-9 change collision attribute */
     if (editor->current_tool == TOOL_COLL_PAINT) {
@@ -859,6 +1271,25 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         }
     }
 
+    /* Palette editor: number keys 0-7 select palette, [/] select color slot */
+    if (editor->current_tool == TOOL_PALETTE) {
+        for (int k = 0; k <= 7; k++) {
+            if (KEY_PRESSED(SDL_SCANCODE_0 + k)) {
+                editor->pal_selected_palette = k;
+            }
+        }
+        if (KEY_PRESSED(SDL_SCANCODE_LEFTBRACKET)) {
+            editor->pal_selected_color = (editor->pal_selected_color + 3) % 4;  /* wrap left */
+        }
+        if (KEY_PRESSED(SDL_SCANCODE_RIGHTBRACKET)) {
+            editor->pal_selected_color = (editor->pal_selected_color + 1) % 4;
+        }
+        /* Tab cycles scope: Both → Top → Bottom → Both */
+        if (KEY_PRESSED(SDL_SCANCODE_TAB) && editor->combined_view) {
+            editor->pal_edit_scope = (editor->pal_edit_scope + 1) % 3;
+        }
+    }
+
     /* [ and ] change tile index */
     if (editor->current_tool == TOOL_TILE_PAINT) {
         if (KEY_PRESSED(SDL_SCANCODE_LEFTBRACKET)) {
@@ -866,6 +1297,32 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         }
         if (KEY_PRESSED(SDL_SCANCODE_RIGHTBRACKET)) {
             editor->paint_tile_index++;
+        }
+        /* R key: reload custom tileset PNGs */
+        if (KEY_PRESSED(SDL_SCANCODE_R) && editor->table.source_folder[0]) {
+            char path[512];
+            snprintf(path, sizeof(path), "%s/data/top_tiles.png", editor->table.source_folder);
+            size_t tile_size = 0;
+            uint8_t *tile_data = tiles_from_png(path, &tile_size);
+            if (tile_data && tile_size > 0) {
+                size_t copy_size = tile_size < 6144 ? tile_size : 6144;
+                memcpy(editor->vram_top[0], tile_data, copy_size);
+                editor->has_custom_tiles_top = true;
+                printf("[EDITOR] Reloaded top tileset (%zu bytes)\n", tile_size);
+            }
+            free(tile_data);
+
+            snprintf(path, sizeof(path), "%s/data/bottom_tiles.png", editor->table.source_folder);
+            tile_data = tiles_from_png(path, &tile_size);
+            if (tile_data && tile_size > 0) {
+                size_t copy_size = tile_size < 6144 ? tile_size : 6144;
+                memcpy(editor->vram_bottom[0], tile_data, copy_size);
+                editor->has_custom_tiles_bottom = true;
+                printf("[EDITOR] Reloaded bottom tileset (%zu bytes)\n", tile_size);
+            }
+            free(tile_data);
+
+            editor->table.has_vram = (editor->has_custom_tiles_top || editor->has_custom_tiles_bottom);
         }
     }
 
@@ -901,19 +1358,103 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
     memcpy(prev_keys, keys, SDL_NUM_SCANCODES);
     #undef KEY_PRESSED
 
-    /* Arrow key panning */
-    float pan_speed = 4.0f / editor->zoom;
-    if (keys[SDL_SCANCODE_LEFT])  editor->camera_x -= pan_speed;
-    if (keys[SDL_SCANCODE_RIGHT]) editor->camera_x += pan_speed;
-    if (keys[SDL_SCANCODE_UP])    editor->camera_y -= pan_speed;
-    if (keys[SDL_SCANCODE_DOWN])  editor->camera_y += pan_speed;
+    /* Palette editor: arrow keys adjust channel value and cycle channels */
+    if (editor->current_tool == TOOL_PALETTE) {
+        int pal = editor->pal_selected_palette;
+        int slot = editor->pal_selected_color;
+        int ch = editor->pal_edit_channel;
+        int scope = editor->pal_edit_scope;  /* 0=both, 1=top, 2=bottom */
+
+        /* Read current color from the correct source based on scope */
+        uint16_t color;
+        if (scope == 1) {
+            color = editor->palettes_top[pal].colors[slot];
+        } else if (scope == 2) {
+            color = editor->palettes_bottom[pal].colors[slot];
+        } else {
+            color = editor->table.bg_palettes[pal].colors[slot];
+        }
+        int r = color & 0x1F;
+        int g = (color >> 5) & 0x1F;
+        int b = (color >> 10) & 0x1F;
+
+        /* Use a repeat-rate timer for comfortable held-key adjustment */
+        static int arrow_repeat_timer = 0;
+        bool up_down = keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_DOWN];
+        bool up_edge = false, down_edge = false;
+        static bool prev_up = false, prev_down = false;
+        bool cur_up = keys[SDL_SCANCODE_UP] != 0;
+        bool cur_down = keys[SDL_SCANCODE_DOWN] != 0;
+        if (cur_up && !prev_up) { up_edge = true; arrow_repeat_timer = 15; }
+        if (cur_down && !prev_down) { down_edge = true; arrow_repeat_timer = 15; }
+        if (up_down && !up_edge && !down_edge) {
+            arrow_repeat_timer--;
+            if (arrow_repeat_timer <= 0) {
+                arrow_repeat_timer = 3;
+                if (cur_up) up_edge = true;
+                if (cur_down) down_edge = true;
+            }
+        }
+        prev_up = cur_up;
+        prev_down = cur_down;
+
+        bool changed = false;
+        if (up_edge) {
+            int *val = (ch == 0) ? &r : (ch == 1) ? &g : &b;
+            if (*val < 31) { (*val)++; changed = true; }
+        }
+        if (down_edge) {
+            int *val = (ch == 0) ? &r : (ch == 1) ? &g : &b;
+            if (*val > 0) { (*val)--; changed = true; }
+        }
+
+        /* Left/Right cycle R/G/B channel */
+        static bool prev_left_pal = false, prev_right_pal = false;
+        bool cur_left = keys[SDL_SCANCODE_LEFT] != 0;
+        bool cur_right = keys[SDL_SCANCODE_RIGHT] != 0;
+        if (cur_left && !prev_left_pal) {
+            editor->pal_edit_channel = (editor->pal_edit_channel + 2) % 3;
+        }
+        if (cur_right && !prev_right_pal) {
+            editor->pal_edit_channel = (editor->pal_edit_channel + 1) % 3;
+        }
+        prev_left_pal = cur_left;
+        prev_right_pal = cur_right;
+
+        if (changed) {
+            uint16_t new_color = (uint16_t)(r | (g << 5) | (b << 10));
+            /* Write to correct targets based on scope */
+            if (scope == 0) {
+                /* Both: write to table + top + bottom */
+                editor->table.bg_palettes[pal].colors[slot] = new_color;
+                editor->palettes_top[pal].colors[slot] = new_color;
+                editor->palettes_bottom[pal].colors[slot] = new_color;
+            } else if (scope == 1) {
+                /* Top only */
+                editor->palettes_top[pal].colors[slot] = new_color;
+                editor->table.bg_palettes[pal].colors[slot] = new_color;
+            } else {
+                /* Bottom only */
+                editor->palettes_bottom[pal].colors[slot] = new_color;
+                editor->table.bg_palettes[pal].colors[slot] = new_color;
+            }
+            editor->table.dirty = true;
+        }
+    } else {
+        /* Arrow key panning (non-palette modes) */
+        float pan_speed = 4.0f / editor->zoom;
+        if (keys[SDL_SCANCODE_LEFT])  editor->camera_x -= pan_speed;
+        if (keys[SDL_SCANCODE_RIGHT]) editor->camera_x += pan_speed;
+        if (keys[SDL_SCANCODE_UP])    editor->camera_y -= pan_speed;
+        if (keys[SDL_SCANCODE_DOWN])  editor->camera_y += pan_speed;
+    }
 
     /* Convert mouse to world coordinates */
     float world_x = editor->camera_x + (float)raw_mx / editor->zoom;
     float world_y = editor->camera_y + (float)raw_my / editor->zoom;
 
     /* Determine sidebar width for click exclusion */
-    int sidebar_w = 200;  /* Must match render code */
+    int sidebar_w = EDITOR_SIDEBAR_W;  /* Must match render code */
 
     /* Handle object placement (only if clicking in the viewport area) */
     if (editor->current_tool == TOOL_PLACE && editor->mouse_left_clicked) {
@@ -1005,6 +1546,10 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         delete_was_down = delete_down;
     }
 
+    /* Modifier key flags */
+    bool alt_held = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
+    bool shift_held = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+
     /* Undo push on paint/erase stroke start */
     if ((editor->current_tool == TOOL_TILE_PAINT || editor->current_tool == TOOL_COLL_PAINT) &&
         (editor->mouse_left_clicked || editor->mouse_right_clicked)) {
@@ -1024,11 +1569,79 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         if (hover_col >= 0 && hover_col < max_cols &&
             hover_disp_row >= 0 && hover_disp_row < disp_rows && hover_data_row < 64) {
             uint8_t attr = editor->table.collision_map[hover_data_row][hover_col];
-            if (attr != 0) {
+            /* Show hover for any tile in collision mode, only non-zero in other modes */
+            if (attr != 0 || editor->current_tool == TOOL_COLL_PAINT) {
                 editor->hovered_coll_col = hover_col;
                 editor->hovered_coll_row = hover_disp_row;
                 editor->hovered_coll_attr = attr;
             }
+        }
+    }
+
+    /* === Eyedropper: Alt+Click samples collision attribute === */
+    if (editor->mouse_left_clicked && alt_held && editor->show_collision_overlay) {
+        int sample_col = (int)(world_x / 8.0f);
+        int sample_disp_row = (int)(world_y / 8.0f);
+        int sample_data_row = editor_display_to_data_row(editor, sample_disp_row);
+        if (sample_col >= 0 && sample_col < max_cols &&
+            sample_disp_row >= 0 && sample_disp_row < disp_rows && sample_data_row < 64) {
+            uint8_t sampled = editor->table.collision_map[sample_data_row][sample_col];
+            editor->paint_coll_attr = sampled;
+            editor->sampled_coll_attr = sampled;
+            editor->has_sampled_attr = true;
+            if (editor->current_tool != TOOL_COLL_PAINT) {
+                editor->current_tool = TOOL_COLL_PAINT;
+                editor->palette_selection = COMP_NONE;
+            }
+        }
+    }
+
+    /* === Fill Rectangle: Shift+Drag === */
+    if (editor->current_tool == TOOL_COLL_PAINT && shift_held && !editor->fill_active) {
+        if (editor->mouse_left_clicked || editor->mouse_right_clicked) {
+            int fc = (int)(world_x / 8.0f);
+            int fr = (int)(world_y / 8.0f);
+            if (fc >= 0 && fc < max_cols && fr >= 0 && fr < disp_rows) {
+                editor->fill_start_col = fc;
+                editor->fill_start_row = fr;
+                editor->fill_active = true;
+                editor->fill_erasing = editor->mouse_right_clicked;
+                editor_push_undo(editor);
+                editor->undo_pushed_this_stroke = true;
+            }
+        }
+    }
+
+    if (editor->fill_active) {
+        if (!shift_held) {
+            /* Shift released mid-drag: cancel fill, undo the push */
+            editor->fill_active = false;
+            editor_undo(editor);
+        } else if (!editor->mouse_left_down && !editor->mouse_right_down) {
+            /* Mouse released: commit fill */
+            int cur_col = (int)(world_x / 8.0f);
+            int cur_row = (int)(world_y / 8.0f);
+
+            int c0 = editor->fill_start_col < cur_col ? editor->fill_start_col : cur_col;
+            int c1 = editor->fill_start_col > cur_col ? editor->fill_start_col : cur_col;
+            int r0 = editor->fill_start_row < cur_row ? editor->fill_start_row : cur_row;
+            int r1 = editor->fill_start_row > cur_row ? editor->fill_start_row : cur_row;
+
+            if (c0 < 0) c0 = 0;
+            if (r0 < 0) r0 = 0;
+            if (c1 >= max_cols) c1 = max_cols - 1;
+            if (r1 >= disp_rows) r1 = disp_rows - 1;
+
+            uint8_t fill_val = editor->fill_erasing ? 0x00 : editor->paint_coll_attr;
+            for (int r = r0; r <= r1; r++) {
+                int dr = editor_display_to_data_row(editor, r);
+                if (dr < 0 || dr >= 64) continue;
+                for (int c = c0; c <= c1; c++) {
+                    editor->table.collision_map[dr][c] = fill_val;
+                }
+            }
+            editor->table.dirty = true;
+            editor->fill_active = false;
         }
     }
 
@@ -1102,8 +1715,9 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         }
     }
 
-    /* Collision painting */
-    if (editor->current_tool == TOOL_COLL_PAINT && editor->mouse_left_down) {
+    /* Collision painting (guarded: skip if Alt or Shift held, or fill active) */
+    if (editor->current_tool == TOOL_COLL_PAINT && editor->mouse_left_down &&
+        !alt_held && !shift_held && !editor->fill_active) {
         if (!editor->undo_pushed_this_stroke) {
             editor_push_undo(editor);
             editor->undo_pushed_this_stroke = true;
@@ -1117,8 +1731,9 @@ static void editor_update_editor(EditorState *editor, Platform *platform) {
         }
     }
 
-    /* Erasing: right-click clears collision */
-    if (editor->current_tool == TOOL_COLL_PAINT && editor->mouse_right_down) {
+    /* Erasing: right-click clears collision (guarded: skip if Alt or Shift held, or fill active) */
+    if (editor->current_tool == TOOL_COLL_PAINT && editor->mouse_right_down &&
+        !alt_held && !shift_held && !editor->fill_active) {
         if (!editor->undo_pushed_this_stroke) {
             editor_push_undo(editor);
             editor->undo_pushed_this_stroke = true;
@@ -1174,7 +1789,13 @@ void editor_update(EditorState *editor, Platform *platform, GameState *state) {
         case EDITOR_SCREEN_PICKER: {
             bool confirmed = editor_update_picker(editor, platform);
             if (confirmed && editor->picker_num_tables > 0) {
-                editor_open_table(editor, editor->picker_cursor, state);
+                /* Check if the [+ New Table] entry was selected (last entry, empty folder) */
+                PickerEntry *sel = &editor->picker_tables[editor->picker_cursor];
+                if (sel->folder[0] == '\0') {
+                    editor_create_new_table(editor, state);
+                } else {
+                    editor_open_table(editor, editor->picker_cursor, state);
+                }
             }
             break;
         }

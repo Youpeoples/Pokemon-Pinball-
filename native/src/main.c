@@ -224,8 +224,14 @@ int main(int argc, char *argv[]) {
                 platform_set_esc_quits(platform, false);
             } else if (state->editor_mode && state->editor_state) {
                 if (state->editor_state->screen == EDITOR_SCREEN_EDITOR) {
-                    /* In editor viewport: go back to picker */
-                    state->editor_state->screen = EDITOR_SCREEN_PICKER;
+                    if (state->editor_state->current_tool != TOOL_SELECT) {
+                        /* Cancel active tool first (drop component from mouse) */
+                        state->editor_state->current_tool = TOOL_SELECT;
+                        state->editor_state->palette_selection = COMP_NONE;
+                    } else {
+                        /* Already in select mode: go back to picker */
+                        state->editor_state->screen = EDITOR_SCREEN_PICKER;
+                    }
                 } else {
                     /* In picker: exit editor entirely */
                     editor_toggle(state, platform);

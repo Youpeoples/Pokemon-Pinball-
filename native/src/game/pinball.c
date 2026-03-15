@@ -21,7 +21,6 @@
 #include "game/tilt.h"
 #include "game/config_data.h"
 #include "game/scripting.h"
-#include "game/editor.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "game/joypad.h"
@@ -46,6 +45,7 @@
 #include "renderer/stage_assets.h"
 #include "renderer/tile_loader.h"
 #include "renderer/vram.h"
+#include "game/editor.h"
 #include <SDL.h>
 
 /* Gravity constant: default 0x000B per frame (now configurable via config/physics.json) */
@@ -338,6 +338,25 @@ static void reload_stage_data(GameState *state) {
     /* Reload graphics into VRAM */
     load_stage_assets(state->current_stage, state->vram,
                       state, state->asset_base_path);
+
+    /* Inject custom tiles from editor during playtest */
+    if (state->editor_state && state->editor_state->playtest_has_custom_tiles) {
+        EditorState *ed = state->editor_state;
+        bool is_bottom = (state->current_stage & 1) != 0;
+        uint8_t (*src)[6144] = is_bottom ? ed->vram_bottom : ed->vram_top;
+        bool has_tiles = is_bottom ? ed->has_custom_tiles_bottom : ed->has_custom_tiles_top;
+        if (has_tiles) {
+            memcpy(state->vram->tile_data[0], src[0], 6144);
+        }
+    }
+
+    /* Inject custom palettes from editor during playtest */
+    if (state->editor_state && state->editor_state->playtest_has_custom_palettes) {
+        EditorState *ed = state->editor_state;
+        bool is_bottom = (state->current_stage & 1) != 0;
+        GBCPalette *src = is_bottom ? ed->playtest_palettes_bottom : ed->playtest_palettes_top;
+        memcpy(state->bg_palettes, src, sizeof(GBCPalette) * 8);
+    }
 
     /* Reload collision data */
     load_stage_collision_attributes(state);
@@ -977,6 +996,27 @@ skip_ball_init:
         state->gfx_loaded = 1;
         printf("[START_BALL] Stage assets loaded.\n");
         fflush(stdout);
+
+        /* Inject custom tiles from editor during playtest */
+        if (state->editor_state && state->editor_state->playtest_has_custom_tiles) {
+            EditorState *ed = state->editor_state;
+            bool is_bottom = (state->current_stage & 1) != 0;
+            uint8_t (*src)[6144] = is_bottom ? ed->vram_bottom : ed->vram_top;
+            bool has_tiles = is_bottom ? ed->has_custom_tiles_bottom : ed->has_custom_tiles_top;
+            if (has_tiles) {
+                memcpy(state->vram->tile_data[0], src[0], 6144);
+                printf("[START_BALL] Injected custom tiles for stage 0x%02X\n",
+                       state->current_stage);
+            }
+        }
+
+        /* Inject custom palettes from editor during playtest */
+        if (state->editor_state && state->editor_state->playtest_has_custom_palettes) {
+            EditorState *ed = state->editor_state;
+            bool is_bottom = (state->current_stage & 1) != 0;
+            GBCPalette *src = is_bottom ? ed->playtest_palettes_bottom : ed->playtest_palettes_top;
+            memcpy(state->bg_palettes, src, sizeof(GBCPalette) * 8);
+        }
     }
 
     /* Load flipper collision data if on a bottom stage */
@@ -1066,20 +1106,6 @@ skip_ball_init:
     }
 
     load_stage_collision_attributes(state);
-
-    /* If playtesting from editor, override collision with editor's custom data.
-     * Editor rows map to collision rows offset by 3 (first 3 rows are buffer). */
-    if (state->editor_state && state->editor_state->playtesting &&
-        state->editor_state->playtest_has_collision) {
-        EditorState *ed = state->editor_state;
-        uint8_t (*src)[32] = (state->current_stage & 1) ?
-            ed->playtest_collision_bottom : ed->playtest_collision_top;
-        for (int r = 0; r < 21; r++) {
-            for (int c = 0; c < 32; c++) {
-                state->stage_collision_map[(r + 3) * 32 + c] = src[r][c];
-            }
-        }
-    }
 
     if (state->current_stage == STAGE_RED_FIELD_TOP) {
         load_stage_data_red_field_top(state);

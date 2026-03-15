@@ -13,6 +13,7 @@
  */
 
 #include "game/collision.h"
+#include "game/editor.h"
 #include "renderer/tile_loader.h"
 #include "data/embedded_data.h"
 #include <stdio.h>
@@ -472,6 +473,22 @@ void load_stage_collision_attributes(GameState *state) {
     /* Load special bottom-stage masks if on a bottom stage */
     if (STAGE_HAS_FLIPPERS(state->current_stage)) {
         load_bottom_collision_masks(state);
+    }
+
+    /* If playtesting from editor, override collision with editor's custom data.
+     * This runs EVERY time collision is loaded (not just once), so gameplay
+     * events that reload collision (alley triggers, spinner hits, catch mode,
+     * etc.) always get the editor's overrides re-applied. */
+    if (state->editor_state && state->editor_state->playtesting &&
+        state->editor_state->playtest_has_collision) {
+        EditorState *ed = state->editor_state;
+        uint8_t (*src)[32] = (state->current_stage & 1) ?
+            ed->playtest_collision_bottom : ed->playtest_collision_top;
+        for (int r = 0; r < 21; r++) {
+            for (int c = 0; c < 32; c++) {
+                state->stage_collision_map[(r + 3) * 32 + c] = src[r][c];
+            }
+        }
     }
 }
 

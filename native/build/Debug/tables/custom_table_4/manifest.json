@@ -1,0 +1,29 @@
+{
+    "name": "Custom Table 4",
+    "type": "main_field",
+    "description": "Custom table created with Stage Builder",
+    "stages": {
+        "top":    { "id": 0, "has_flippers": false },
+        "bottom": { "id": 1, "has_flippers": true }
+    },
+    "scripts": {
+        "main": "scripts/main.lua",
+        "collision": "scripts/collision.lua",
+        "sprites": "scripts/sprites.lua",
+        "slot": "scripts/slot.lua",
+        "catchem": "scripts/catchem.lua",
+        "evolution": "scripts/evolution.lua",
+        "map_move": "scripts/map_move.lua",
+        "billboard": "scripts/billboard.lua"
+    },
+    "data": {
+        "collision_top": "data/top.collision",
+        "collision_bottom": "data/bottom.collision",
+        "tilemap_top": "data/top.map",
+        "tilemap_top_attr": "data/top.attr",
+        "tilemap_bottom": "data/bottom.map",
+        "tilemap_bottom_attr": "data/bottom.attr",
+        "tileset_top": "data/top_tiles.png",
+        "tileset_bottom": "data/bottom_tiles.png"
+    }
+}
