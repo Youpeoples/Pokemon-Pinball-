@@ -44,4 +44,11 @@ bool load_screen_assets(uint8_t screen_id, VirtualVRAM *vram,
  */
 void interleave_tiles(uint8_t *data, size_t size, int tiles_per_row);
 
+/*
+ * Load VRAM, palettes, and collision maps for both halves of the current
+ * field into the combined view snapshot buffers (vram_top/vram_bottom,
+ * bg_palettes_top/bottom, etc.). Called when toggling combined view on.
+ */
+void combined_view_load_both_halves(GameState *state);
+
 #endif /* STAGE_ASSETS_H */

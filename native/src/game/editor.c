@@ -8,6 +8,7 @@
 #include "game/editor.h"
 #include "game/editor_mask.h"
 #include "game/game_state.h"
+#include "game/config_data.h"
 #include "platform/platform.h"
 #include "game/editor_render.h"
 #include "game/editor_serialize.h"
@@ -132,6 +133,14 @@ EditorState *editor_create(void) {
     editor->palette_selection = COMP_NONE;
     editor->selected_object = -1;
 
+    /* Link mode defaults */
+    editor->link_mode_source = -1;
+    editor->linking = false;
+    editor->selected_link = -1;
+    editor->show_link_overlay = true;  /* Default ON so links are visible */
+    editor->template_picker_open = false;
+    editor->template_placing = false;
+
     /* Collision tile selection/hover */
     editor->hovered_coll_col = -1;
     editor->hovered_coll_row = -1;
@@ -254,6 +263,83 @@ void editor_scan_tables(EditorState *editor) {
 }
 
 /*=============================================================================
+ * Config Object Auto-Import
+ *===========================================================================*/
+
+/* Map config group name to editor ComponentType */
+static ComponentType config_group_to_component_type(const char *name) {
+    if (strcmp(name, "voltorb") == 0)           return COMP_BUMPER;
+    if (strcmp(name, "shellder") == 0)          return COMP_BUMPER;
+    if (strcmp(name, "bumpers") == 0)           return COMP_BUMPER;
+    if (strcmp(name, "spinner") == 0)           return COMP_SPINNER;
+    if (strcmp(name, "board_triggers") == 0)    return COMP_BOARD_TRIGGER;
+    if (strcmp(name, "top_staryu") == 0)        return COMP_STARYU;
+    if (strcmp(name, "bottom_staryu") == 0)     return COMP_STARYU;
+    if (strcmp(name, "bellsprout") == 0)        return COMP_FIELD_CREATURE;
+    if (strcmp(name, "slowpoke") == 0)          return COMP_FIELD_CREATURE;
+    if (strcmp(name, "cloyster") == 0)          return COMP_FIELD_CREATURE;
+    if (strcmp(name, "psyduck_poliwag") == 0)   return COMP_FIELD_CREATURE;
+    if (strcmp(name, "upgrade_triggers") == 0)  return COMP_BALL_UPGRADE;
+    if (strcmp(name, "wild_mon") == 0)          return COMP_WILD_POKEMON;
+    if (strcmp(name, "pikachu") == 0)           return COMP_PIKACHU_SAVER;
+    if (strcmp(name, "cave_lights") == 0)       return COMP_CAVE_LIGHT;
+    if (strcmp(name, "diglett") == 0)           return COMP_DIGLETT;
+    if (strcmp(name, "slot") == 0)              return COMP_SLOT_MACHINE;
+    if (strcmp(name, "launch_alley") == 0)      return COMP_LAUNCH_ALLEY;
+    if (strcmp(name, "bonus_multipliers") == 0) return COMP_RAILING;
+    if (strcmp(name, "ditto_slot") == 0)        return COMP_DITTO_SLOT;
+    return COMP_BOARD_TRIGGER; /* Fallback for unknown groups */
+}
+
+/* Import objects from a TableConfig into EditorObjects.
+ * y_offset: pixel offset for bottom stage in combined view (144 = 18 rows * 8px). */
+static void editor_import_config_objects(EditorState *editor, const TableConfig *table, int y_offset) {
+    for (int g = 0; g < table->num_groups; g++) {
+        const TableObjectGroup *grp = &table->groups[g];
+        ComponentType comp_type = config_group_to_component_type(grp->name);
+
+        for (int o = 0; o < grp->num_objects; o++) {
+            if (editor->table.num_objects >= MAX_EDITOR_OBJECTS) {
+                printf("[EDITOR] Warning: MAX_EDITOR_OBJECTS reached during config import\n");
+                return;
+            }
+
+            EditorObject *obj = &editor->table.objects[editor->table.num_objects++];
+            memset(obj, 0, sizeof(EditorObject));
+            obj->type = comp_type;
+            obj->x = grp->objects[o].x;
+            obj->y = (uint16_t)(grp->objects[o].y + y_offset);
+            obj->x_thresh = grp->x_thresh;
+            obj->y_thresh = grp->y_thresh;
+            obj->attribute_gated = grp->attribute_gated;
+            if (grp->attribute_gated) {
+                int a;
+                for (a = 0; a < CONFIG_MAX_ATTRS && grp->collision_attrs[a] != 0xFF; a++) {
+                    if (a >= 16) break;  /* EditorObject attrs[16] limit */
+                    obj->attrs[a] = grp->collision_attrs[a];
+                }
+                obj->num_attrs = a;
+            }
+            obj->score = component_defaults[comp_type].default_score;
+            obj->bounce_force = component_defaults[comp_type].default_force;
+            obj->sfx_id = component_defaults[comp_type].default_sfx;
+        }
+    }
+}
+
+/* Get the TableConfig for a given stage ID, or NULL if not a builtin stage */
+static const TableConfig *config_for_stage(GameState *state, uint8_t stage_id) {
+    if (!state || !state->config) return NULL;
+    switch (stage_id) {
+        case 0x0: return &state->config->red_field_top;
+        case 0x1: return &state->config->red_field_bottom;
+        case 0x4: return &state->config->blue_field_top;
+        case 0x5: return &state->config->blue_field_bottom;
+        default:  return NULL;
+    }
+}
+
+/*=============================================================================
  * Open Table from Picker
  *===========================================================================*/
 
@@ -279,6 +365,11 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
     editor->undo_pushed_this_stroke = false;
     editor->has_custom_tiles_top = false;
     editor->has_custom_tiles_bottom = false;
+    editor->linking = false;
+    editor->link_mode_source = -1;
+    editor->selected_link = -1;
+    editor->template_picker_open = false;
+    editor->template_placing = false;
 
     /* Initialize the editor table with info from the picker entry */
     memset(&editor->table, 0, sizeof(EditorTable));
@@ -329,6 +420,43 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
                 if (sid_root && cJSON_IsNumber(sid_root) && !is_main_field) {
                     single_stage_id = (uint8_t)sid_root->valueint;
                 }
+
+                /* Parse links array */
+                cJSON *links_arr = cJSON_GetObjectItem(mroot, "links");
+                if (links_arr && cJSON_IsArray(links_arr)) {
+                    editor->table.num_links = 0;
+                    cJSON *link_item;
+                    cJSON_ArrayForEach(link_item, links_arr) {
+                        if (editor->table.num_links >= MAX_TABLE_LINKS) break;
+                        ObjectLink *link = &editor->table.links[editor->table.num_links];
+                        cJSON *src = cJSON_GetObjectItem(link_item, "source");
+                        cJSON *tgt = cJSON_GetObjectItem(link_item, "target");
+                        cJSON *typ = cJSON_GetObjectItem(link_item, "type");
+                        cJSON *thr = cJSON_GetObjectItem(link_item, "threshold");
+                        cJSON *tmr = cJSON_GetObjectItem(link_item, "timer");
+
+                        link->source_idx = src && cJSON_IsNumber(src) ? src->valueint : 0;
+                        link->target_idx = tgt && cJSON_IsNumber(tgt) ? tgt->valueint : 0;
+                        link->threshold = thr && cJSON_IsNumber(thr) ? thr->valueint : 0;
+                        link->timer_frames = tmr && cJSON_IsNumber(tmr) ? tmr->valueint : 0;
+
+                        /* Parse link type string */
+                        link->type = LINK_NONE;
+                        if (typ && cJSON_IsString(typ)) {
+                            const char *ts = typ->valuestring;
+                            if (strcmp(ts, "triggers") == 0) link->type = LINK_TRIGGERS;
+                            else if (strcmp(ts, "charges") == 0) link->type = LINK_CHARGES;
+                            else if (strcmp(ts, "toggles") == 0) link->type = LINK_TOGGLES;
+                            else if (strcmp(ts, "sequence") == 0) link->type = LINK_SEQUENCE;
+                        }
+
+                        if (link->type != LINK_NONE) {
+                            editor->table.num_links++;
+                        }
+                    }
+                    printf("[EDITOR] Loaded %d links from manifest\n", editor->table.num_links);
+                }
+
                 cJSON_Delete(mroot);
             }
             free(mjson);
@@ -425,6 +553,23 @@ void editor_open_table(EditorState *editor, int picker_index, GameState *state) 
 
             printf("[EDITOR] Loaded combined view: top=0x%02X bottom=0x%02X for '%s'\n",
                    top_stage_id, bottom_stage_id, entry->name);
+
+            /* Auto-import game objects from config data for builtin tables */
+            {
+                const TableConfig *top_cfg = config_for_stage(state, top_stage_id);
+                const TableConfig *bot_cfg = config_for_stage(state, bottom_stage_id);
+                if (top_cfg && top_cfg->num_groups > 0) {
+                    editor_import_config_objects(editor, top_cfg, 0);
+                    printf("[EDITOR] Imported %d config groups from top stage 0x%02X\n",
+                           top_cfg->num_groups, top_stage_id);
+                }
+                if (bot_cfg && bot_cfg->num_groups > 0) {
+                    /* Bottom stage objects offset by 18 visible rows * 8px = 144 */
+                    editor_import_config_objects(editor, bot_cfg, 18 * 8);
+                    printf("[EDITOR] Imported %d config groups from bottom stage 0x%02X\n",
+                           bot_cfg->num_groups, bottom_stage_id);
+                }
+            }
 
         } else {
             /* === Single stage view === */
@@ -1207,6 +1352,9 @@ static bool editor_update_picker(EditorState *editor, Platform *platform) {
     return confirmed;
 }
 
+/* Forward declarations */
+static void editor_place_template(EditorState *editor, int tmpl_idx, int cx, int cy);
+
 /*=============================================================================
  * Editor Update - Main Editor Screen
  *===========================================================================*/
@@ -1307,8 +1455,15 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
         editor->target_zoom = 2.0f;
     }
     if (KEY_PRESSED(SDL_SCANCODE_T)) {
-        editor->current_tool = TOOL_TILE_PAINT;
-        editor->palette_selection = COMP_NONE;
+        if (editor->current_tool == TOOL_SELECT && editor->selected_object < 0 && !editor->linking) {
+            /* Toggle template picker */
+            editor->template_picker_open = !editor->template_picker_open;
+            editor->template_placing = false;
+            editor->template_cursor = 0;
+        } else if (!editor->linking) {
+            editor->current_tool = TOOL_TILE_PAINT;
+            editor->palette_selection = COMP_NONE;
+        }
     }
     if (KEY_PRESSED(SDL_SCANCODE_X)) {
         editor->current_tool = TOOL_COLL_PAINT;
@@ -1318,12 +1473,28 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
         editor->current_tool = TOOL_ERASE;
         editor->palette_selection = COMP_NONE;
     }
+    /* L key: link mode (select tool + object selected), or palette tool otherwise.
+     * Link mode takes priority so L never accidentally switches to palette
+     * when you're trying to link objects. Use K for palette instead. */
     if (KEY_PRESSED(SDL_SCANCODE_L)) {
+        if (editor->linking) {
+            /* Cycle link type with repeated L presses */
+            editor->link_type_cycle++;
+            if (editor->link_type_cycle >= LINK_COUNT) editor->link_type_cycle = LINK_TRIGGERS;
+        } else if (editor->selected_object >= 0) {
+            /* Enter link creation mode (works from any tool) */
+            editor->current_tool = TOOL_SELECT;
+            editor->linking = true;
+            editor->link_mode_source = editor->selected_object;
+            editor->link_type_cycle = LINK_TRIGGERS;
+        }
+    }
+    if (KEY_PRESSED(SDL_SCANCODE_K)) {
         editor->current_tool = TOOL_PALETTE;
         editor->palette_selection = COMP_NONE;
     }
     if (KEY_PRESSED(SDL_SCANCODE_I)) {
-        editor->show_tile_inspector = !editor->show_tile_inspector;
+        editor->show_link_overlay = !editor->show_link_overlay;
     }
     /* Q toggles ball test point overlay (collision mode visual aid) */
     if (KEY_PRESSED(SDL_SCANCODE_Q) && editor->mask_editor) {
@@ -1462,6 +1633,67 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
         }
     }
 
+    /* Template picker input: arrow keys navigate, Enter selects */
+    if (editor->template_picker_open && !editor->template_placing) {
+        static bool tp_up_prev = false, tp_down_prev = false, tp_enter_prev = false;
+        bool tp_up = keys[SDL_SCANCODE_UP] != 0;
+        bool tp_down = keys[SDL_SCANCODE_DOWN] != 0;
+        bool tp_enter = keys[SDL_SCANCODE_RETURN] != 0;
+
+        if (tp_up && !tp_up_prev && editor->template_cursor > 0) {
+            editor->template_cursor--;
+        }
+        if (tp_down && !tp_down_prev && editor->template_cursor < NUM_BEHAVIOR_TEMPLATES - 1) {
+            editor->template_cursor++;
+        }
+        if (tp_enter && !tp_enter_prev) {
+            editor->template_selected = editor->template_cursor;
+            editor->template_placing = true;
+            editor->template_picker_open = false;
+        }
+        tp_up_prev = tp_up;
+        tp_down_prev = tp_down;
+        tp_enter_prev = tp_enter;
+    }
+
+    /* Link inspector: arrow keys cycle link type, +/- adjust threshold */
+    if (editor->selected_link >= 0 && editor->selected_link < editor->table.num_links) {
+        ObjectLink *link = &editor->table.links[editor->selected_link];
+        static bool li_left_prev = false, li_right_prev = false;
+        static bool li_up_prev = false, li_down_prev = false;
+        bool li_left = keys[SDL_SCANCODE_LEFT] != 0;
+        bool li_right = keys[SDL_SCANCODE_RIGHT] != 0;
+        bool li_up = keys[SDL_SCANCODE_UP] != 0;
+        bool li_down = keys[SDL_SCANCODE_DOWN] != 0;
+
+        if (li_left && !li_left_prev && editor->current_tool == TOOL_SELECT) {
+            int t = (int)link->type - 1;
+            if (t < LINK_TRIGGERS) t = LINK_SEQUENCE;
+            link->type = (LinkType)t;
+            editor->table.dirty = true;
+        }
+        if (li_right && !li_right_prev && editor->current_tool == TOOL_SELECT) {
+            int t = (int)link->type + 1;
+            if (t >= LINK_COUNT) t = LINK_TRIGGERS;
+            link->type = (LinkType)t;
+            editor->table.dirty = true;
+        }
+        if (li_up && !li_up_prev && editor->current_tool == TOOL_SELECT &&
+            link->type == LINK_CHARGES) {
+            link->threshold++;
+            editor->table.dirty = true;
+        }
+        if (li_down && !li_down_prev && editor->current_tool == TOOL_SELECT &&
+            link->type == LINK_CHARGES && link->threshold > 1) {
+            link->threshold--;
+            editor->table.dirty = true;
+        }
+        li_left_prev = li_left;
+        li_right_prev = li_right;
+        li_up_prev = li_up;
+        li_down_prev = li_down;
+    }
+
     /* Palette editor: arrow keys adjust channel value and cycle channels */
     if (editor->current_tool == TOOL_PALETTE) {
         int pal = editor->pal_selected_palette;
@@ -1578,11 +1810,11 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
                 obj->type = editor->palette_selection;
 
                 if (editor->snap_to_grid) {
-                    obj->x = ((int)world_x / editor->grid_size) * editor->grid_size;
-                    obj->y = ((int)world_y / editor->grid_size) * editor->grid_size;
+                    obj->x = (uint16_t)(((int)world_x / editor->grid_size) * editor->grid_size);
+                    obj->y = (uint16_t)(((int)world_y / editor->grid_size) * editor->grid_size + OBJECT_Y_DISPLAY_OFFSET);
                 } else {
-                    obj->x = (uint8_t)world_x;
-                    obj->y = (uint8_t)world_y;
+                    obj->x = (uint16_t)world_x;
+                    obj->y = (uint16_t)((int)world_y + OBJECT_Y_DISPLAY_OFFSET);
                 }
 
                 editor_component_default_bbox(obj->type, &obj->x_thresh, &obj->y_thresh);
@@ -1597,18 +1829,54 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
         }
     }
 
-    /* Handle object selection */
-    if (editor->current_tool == TOOL_SELECT && editor->mouse_left_clicked) {
-        editor->selected_object = -1;
+    /* Handle link mode click (target selection) */
+    if (editor->linking && editor->mouse_left_clicked) {
+        int clicked_obj = -1;
         for (int i = editor->table.num_objects - 1; i >= 0; i--) {
             EditorObject *obj = &editor->table.objects[i];
             int dx = abs((int)world_x - (int)obj->x);
-            int dy = abs((int)world_y - (int)obj->y);
+            int dy = abs((int)world_y - (int)(obj->y - OBJECT_Y_DISPLAY_OFFSET));
+            if (dx <= obj->x_thresh && dy <= obj->y_thresh) {
+                clicked_obj = i;
+                break;
+            }
+        }
+        if (clicked_obj >= 0 && clicked_obj != editor->link_mode_source) {
+            editor_push_undo(editor);
+            int link_idx = editor_add_link(&editor->table, editor->link_mode_source,
+                                           clicked_obj, (LinkType)editor->link_type_cycle);
+            if (link_idx >= 0) {
+                editor->selected_link = link_idx;
+            }
+            editor->linking = false;
+            editor->link_mode_source = -1;
+        }
+    }
+    /* Handle template placement click */
+    else if (editor->template_placing && editor->mouse_left_clicked) {
+        int cx = (int)world_x;
+        int cy = (int)world_y;
+        if (editor->snap_to_grid) {
+            cx = (cx / editor->grid_size) * editor->grid_size;
+            cy = (cy / editor->grid_size) * editor->grid_size;
+        }
+        editor_place_template(editor, editor->template_selected, cx, cy);
+        editor->template_placing = false;
+    }
+    /* Handle object selection (normal mode) */
+    else if (editor->current_tool == TOOL_SELECT && editor->mouse_left_clicked) {
+        editor->selected_object = -1;
+        editor->selected_link = -1;
+        for (int i = editor->table.num_objects - 1; i >= 0; i--) {
+            EditorObject *obj = &editor->table.objects[i];
+            int display_y = (int)obj->y - OBJECT_Y_DISPLAY_OFFSET;
+            int dx = abs((int)world_x - (int)obj->x);
+            int dy = abs((int)world_y - display_y);
             if (dx <= obj->x_thresh && dy <= obj->y_thresh) {
                 editor->selected_object = i;
                 editor->dragging_object = true;
                 editor->drag_offset_x = (int)world_x - obj->x;
-                editor->drag_offset_y = (int)world_y - obj->y;
+                editor->drag_offset_y = (int)world_y - display_y;
                 editor_push_undo(editor);  /* Undo before drag starts */
                 break;
             }
@@ -1619,13 +1887,14 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
     if (editor->dragging_object && editor->mouse_left_down && editor->selected_object >= 0) {
         EditorObject *obj = &editor->table.objects[editor->selected_object];
         int new_x = (int)world_x - editor->drag_offset_x;
-        int new_y = (int)world_y - editor->drag_offset_y;
+        int new_display_y = (int)world_y - editor->drag_offset_y;
         if (editor->snap_to_grid) {
             new_x = (new_x / editor->grid_size) * editor->grid_size;
-            new_y = (new_y / editor->grid_size) * editor->grid_size;
+            new_display_y = (new_display_y / editor->grid_size) * editor->grid_size;
         }
-        if (new_x >= 0 && new_x <= 255) obj->x = (uint8_t)new_x;
-        if (new_y >= 0 && new_y <= 255) obj->y = (uint8_t)new_y;
+        int new_game_y = new_display_y + OBJECT_Y_DISPLAY_OFFSET;
+        if (new_x >= 0 && new_x < 512) obj->x = (uint16_t)new_x;
+        if (new_game_y >= 0 && new_game_y < 512) obj->y = (uint16_t)new_game_y;
         editor->table.dirty = true;
     }
     if (!editor->mouse_left_down) {
@@ -1633,19 +1902,32 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
         editor->dragging_coll_tile = false;
     }
 
-    /* Delete key removes selected object (edge-detected via mouse_left_clicked as proxy for "just pressed") */
+    /* Delete key removes selected object or selected link */
     {
         static bool delete_was_down = false;
         bool delete_down = keys[SDL_SCANCODE_DELETE] != 0;
-        if (delete_down && !delete_was_down && editor->selected_object >= 0) {
-            editor_push_undo(editor);
-            int idx = editor->selected_object;
-            for (int i = idx; i < editor->table.num_objects - 1; i++) {
-                editor->table.objects[i] = editor->table.objects[i + 1];
+        if (delete_down && !delete_was_down) {
+            if (editor->selected_link >= 0) {
+                /* Delete selected link */
+                editor_push_undo(editor);
+                editor_remove_link(&editor->table, editor->selected_link);
+                editor->selected_link = -1;
+            } else if (editor->selected_object >= 0) {
+                /* Delete selected object + its links */
+                editor_push_undo(editor);
+                int idx = editor->selected_object;
+                editor_remove_links_for_object(&editor->table, idx);
+                for (int i = idx; i < editor->table.num_objects - 1; i++) {
+                    editor->table.objects[i] = editor->table.objects[i + 1];
+                }
+                editor->table.num_objects--;
+                editor_fix_link_indices_after_delete(&editor->table, idx);
+                editor->selected_object = -1;
+                editor->selected_link = -1;
+                editor->linking = false;
+                editor->link_mode_source = -1;
+                editor->table.dirty = true;
             }
-            editor->table.num_objects--;
-            editor->selected_object = -1;
-            editor->table.dirty = true;
         }
         delete_was_down = delete_down;
     }
@@ -1866,6 +2148,209 @@ static void editor_update_editor(EditorState *editor, Platform *platform, GameSt
 /*=============================================================================
  * Editor Update (input processing - dispatches based on screen)
  *===========================================================================*/
+
+/*=============================================================================
+ * Object Link CRUD Operations
+ *===========================================================================*/
+
+static const char *link_type_names[] = {
+    "None", "Triggers", "Charges", "Toggles", "Sequence"
+};
+
+const char *editor_link_type_name(LinkType type) {
+    if (type >= 0 && type < LINK_COUNT) return link_type_names[type];
+    return "Unknown";
+}
+
+int editor_add_link(EditorTable *table, int source, int target, LinkType type) {
+    if (!table || source < 0 || target < 0 || source == target) return -1;
+    if (table->num_links >= MAX_TABLE_LINKS) return -1;
+
+    /* Check for duplicate */
+    for (int i = 0; i < table->num_links; i++) {
+        if (table->links[i].source_idx == source &&
+            table->links[i].target_idx == target) {
+            return -1;
+        }
+    }
+
+    /* Count outgoing links from source */
+    int out_count = 0;
+    for (int i = 0; i < table->num_links; i++) {
+        if (table->links[i].source_idx == source) out_count++;
+    }
+    if (out_count >= MAX_OBJECT_LINKS) return -1;
+
+    ObjectLink *link = &table->links[table->num_links];
+    link->source_idx = source;
+    link->target_idx = target;
+    link->type = type;
+    link->threshold = (type == LINK_CHARGES) ? 3 : 0;
+    link->timer_frames = 0;
+    table->dirty = true;
+
+    return table->num_links++;
+}
+
+void editor_remove_link(EditorTable *table, int link_idx) {
+    if (!table || link_idx < 0 || link_idx >= table->num_links) return;
+    for (int i = link_idx; i < table->num_links - 1; i++) {
+        table->links[i] = table->links[i + 1];
+    }
+    table->num_links--;
+    table->dirty = true;
+}
+
+void editor_remove_links_for_object(EditorTable *table, int obj_idx) {
+    if (!table) return;
+    for (int i = table->num_links - 1; i >= 0; i--) {
+        if (table->links[i].source_idx == obj_idx ||
+            table->links[i].target_idx == obj_idx) {
+            editor_remove_link(table, i);
+        }
+    }
+}
+
+void editor_fix_link_indices_after_delete(EditorTable *table, int deleted_idx) {
+    if (!table) return;
+    for (int i = 0; i < table->num_links; i++) {
+        if (table->links[i].source_idx > deleted_idx) table->links[i].source_idx--;
+        if (table->links[i].target_idx > deleted_idx) table->links[i].target_idx--;
+    }
+}
+
+/*=============================================================================
+ * Behavior Templates (Phase 5)
+ *===========================================================================*/
+
+static const BehaviorTemplate builtin_templates[NUM_BEHAVIOR_TEMPLATES] = {
+    {
+        "N-Hit Combo",
+        "3 bumpers that charge a reward trigger",
+        4, /* num_objects */
+        {
+            { COMP_BUMPER, -24, -16 },
+            { COMP_BUMPER,  24, -16 },
+            { COMP_BUMPER,   0,  16 },
+            { COMP_BOARD_TRIGGER, 0, -32 },
+        },
+        3, /* num_links */
+        {
+            { 0, 3, LINK_CHARGES, 1 },
+            { 1, 3, LINK_CHARGES, 1 },
+            { 2, 3, LINK_CHARGES, 1 },
+        }
+    },
+    {
+        "Charge Saver",
+        "Spinner charges Pikachu saver (5 hits)",
+        2,
+        {
+            { COMP_SPINNER, -16, 0 },
+            { COMP_PIKACHU_SAVER, 16, 0 },
+        },
+        1,
+        {
+            { 0, 1, LINK_CHARGES, 5 },
+        }
+    },
+    {
+        "Toggle Pair",
+        "2 field creatures that alternate on/off",
+        2,
+        {
+            { COMP_FIELD_CREATURE, -16, 0 },
+            { COMP_FIELD_CREATURE,  16, 0 },
+        },
+        2,
+        {
+            { 0, 1, LINK_TOGGLES, 0 },
+            { 1, 0, LINK_TOGGLES, 0 },
+        }
+    },
+    {
+        "CAVE Sequence",
+        "4 lights in sequence unlock a reward",
+        5,
+        {
+            { COMP_CAVE_LIGHT, -24, 0 },
+            { COMP_CAVE_LIGHT,  -8, 0 },
+            { COMP_CAVE_LIGHT,   8, 0 },
+            { COMP_CAVE_LIGHT,  24, 0 },
+            { COMP_BOARD_TRIGGER, 0, -16 },
+        },
+        4,
+        {
+            { 0, 1, LINK_SEQUENCE, 0 },
+            { 1, 2, LINK_SEQUENCE, 0 },
+            { 2, 3, LINK_SEQUENCE, 0 },
+            { 3, 4, LINK_TRIGGERS, 0 },
+        }
+    },
+    {
+        "Timed Gate",
+        "Trigger activates target for 5 seconds",
+        2,
+        {
+            { COMP_BOARD_TRIGGER, -16, 0 },
+            { COMP_BOARD_TRIGGER,  16, 0 },
+        },
+        1,
+        {
+            { 0, 1, LINK_TRIGGERS, 300 },  /* timer_frames stored in threshold field; will be moved to timer on placement */
+        }
+    },
+};
+
+const BehaviorTemplate *editor_get_templates(void) {
+    return builtin_templates;
+}
+
+static void editor_place_template(EditorState *editor, int tmpl_idx, int cx, int cy) {
+    if (tmpl_idx < 0 || tmpl_idx >= NUM_BEHAVIOR_TEMPLATES) return;
+    const BehaviorTemplate *tmpl = &builtin_templates[tmpl_idx];
+
+    if (editor->table.num_objects + tmpl->num_objects > MAX_EDITOR_OBJECTS) return;
+    if (editor->table.num_links + tmpl->num_links > MAX_TABLE_LINKS) return;
+
+    editor_push_undo(editor);
+
+    int base_obj = editor->table.num_objects;
+
+    /* Place objects at relative offsets from click point */
+    for (int i = 0; i < tmpl->num_objects; i++) {
+        EditorObject *obj = &editor->table.objects[base_obj + i];
+        memset(obj, 0, sizeof(EditorObject));
+        obj->type = tmpl->objects[i].type;
+        int ox = cx + tmpl->objects[i].dx;
+        int oy = cy + tmpl->objects[i].dy + OBJECT_Y_DISPLAY_OFFSET;
+        obj->x = (uint16_t)(ox < 0 ? 0 : (ox > 511 ? 511 : ox));
+        obj->y = (uint16_t)(oy < 0 ? 0 : (oy > 511 ? 511 : oy));
+        editor_component_default_bbox(obj->type, &obj->x_thresh, &obj->y_thresh);
+        obj->score = editor_component_default_score(obj->type);
+        obj->bounce_force = component_defaults[obj->type].default_force;
+        obj->sfx_id = component_defaults[obj->type].default_sfx;
+    }
+    editor->table.num_objects += tmpl->num_objects;
+
+    /* Wire up links */
+    for (int i = 0; i < tmpl->num_links; i++) {
+        int src = base_obj + tmpl->links[i].src;
+        int dst = base_obj + tmpl->links[i].dst;
+        int link_idx = editor_add_link(&editor->table, src, dst, tmpl->links[i].type);
+        if (link_idx >= 0 && tmpl->links[i].type == LINK_CHARGES) {
+            editor->table.links[link_idx].threshold = tmpl->links[i].threshold;
+        }
+        /* For the "Timed Gate" template, threshold is actually timer_frames */
+        if (link_idx >= 0 && tmpl_idx == 4 && tmpl->links[i].type == LINK_TRIGGERS) {
+            editor->table.links[link_idx].timer_frames = tmpl->links[i].threshold;
+            editor->table.links[link_idx].threshold = 0;
+        }
+    }
+
+    editor->table.dirty = true;
+    editor->selected_object = base_obj;  /* Select first placed object */
+}
 
 void editor_update(EditorState *editor, Platform *platform, GameState *state) {
     if (!editor || !editor->active) return;

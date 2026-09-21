@@ -24,6 +24,7 @@
 #include "game/save.h"
 #include "game/editor.h"
 #include "game/editor_mask.h"
+#include "renderer/stage_assets.h"
 #include <string.h>
 
 /* GBC runs at ~59.7275 Hz */
@@ -203,10 +204,25 @@ int main(int argc, char *argv[]) {
             editor_toggle(state, platform);
         }
 
-        /* F5 starts playtest (only in editor mode) */
+        /* F5: editor playtest when in editor, combined view toggle otherwise */
         if (platform_consume_f5_toggle(platform)) {
             if (state->editor_mode && state->editor_state) {
                 editor_start_playtest(state->editor_state, state);
+            } else {
+                /* Toggle combined view (full table) */
+                state->combined_view_active = !state->combined_view_active;
+                renderer_set_combined_mode(renderer, state->combined_view_active);
+                if (state->combined_view_active &&
+                    state->current_screen == SCREEN_PINBALL_GAME) {
+                    combined_view_load_both_halves(state);
+                } else if (!state->combined_view_active) {
+                    /* Restore original VRAM and reload current stage assets */
+                    state->vram = vram;
+                    if (state->current_screen == SCREEN_PINBALL_GAME) {
+                        load_stage_assets(state->current_stage, state->vram,
+                                          state, state->asset_base_path);
+                    }
+                }
             }
         }
 
@@ -230,7 +246,18 @@ int main(int argc, char *argv[]) {
                 platform_set_esc_quits(platform, false);
             } else if (state->editor_mode && state->editor_state) {
                 if (state->editor_state->screen == EDITOR_SCREEN_EDITOR) {
-                    if (state->editor_state->current_tool != TOOL_SELECT) {
+                    if (state->editor_state->linking) {
+                        /* Cancel link creation mode */
+                        state->editor_state->linking = false;
+                        state->editor_state->link_mode_source = -1;
+                    } else if (state->editor_state->template_picker_open) {
+                        /* Close template picker */
+                        state->editor_state->template_picker_open = false;
+                        state->editor_state->template_placing = false;
+                    } else if (state->editor_state->template_placing) {
+                        /* Cancel template placement */
+                        state->editor_state->template_placing = false;
+                    } else if (state->editor_state->current_tool != TOOL_SELECT) {
                         /* Cancel active tool first (drop component from mouse) */
                         state->editor_state->current_tool = TOOL_SELECT;
                         state->editor_state->palette_selection = COMP_NONE;

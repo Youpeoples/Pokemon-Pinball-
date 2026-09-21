@@ -19,6 +19,10 @@ void renderer_shutdown(Renderer *renderer);
 /* Set the VRAM pointer the renderer should use for BG rendering */
 void renderer_set_vram(Renderer *renderer, VirtualVRAM *vram);
 
+/* Enable or disable combined view mode (160x288 full table).
+ * Recreates the framebuffer texture at the appropriate size. */
+void renderer_set_combined_mode(Renderer *renderer, bool enabled);
+
 /* Begin a new frame (clear the framebuffer) */
 void renderer_begin_frame(Renderer *renderer);
 

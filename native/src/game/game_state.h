@@ -136,6 +136,10 @@ typedef struct GameState {
     OAMEntry sprite_buffer[GBC_OAM_ENTRIES];
     uint8_t sprite_buffer_size;  /* wSpriteBufferSize */
 
+    /* Secondary sprite buffer for combined view (other half's sprites) */
+    OAMEntry sprite_buffer_other[GBC_OAM_ENTRIES];
+    uint8_t sprite_buffer_other_size;
+
     /* --- Palette data (D200-D2FF) --- */
     GBCPalette bg_palettes[GBC_NUM_BG_PALETTES];    /* wPaletteData BG */
     GBCPalette obj_palettes[GBC_NUM_OBJ_PALETTES];  /* wPaletteData OBJ */
@@ -889,6 +893,18 @@ typedef struct GameState {
     uint8_t debug_mode;             /* F1 toggles: 0=off, 1=text overlay */
     float debug_fps;                /* Measured FPS (updated once per second) */
     uint8_t debug_sprite_count;     /* Number of active OAM sprites this frame */
+
+    /* --- Combined view state (not in original GBC) --- */
+    bool combined_view_active;          /* F5 toggle: show full table */
+    VirtualVRAM *vram_top;              /* VRAM snapshot for top half */
+    VirtualVRAM *vram_bottom;           /* VRAM snapshot for bottom half */
+    GBCPalette bg_palettes_top[8];      /* BG palettes for top half */
+    GBCPalette bg_palettes_bottom[8];   /* BG palettes for bottom half */
+    GBCPalette obj_palettes_top[8];     /* OBJ palettes for top half */
+    GBCPalette obj_palettes_bottom[8];  /* OBJ palettes for bottom half */
+    uint8_t collision_map_top[0x300];   /* Collision map for top half */
+    uint8_t collision_map_bottom[0x300];/* Collision map for bottom half */
+    uint8_t combined_active_half;       /* 0=top, 1=bottom — which half ball is in */
 
     /* --- Native renderer state (not in original GBC) --- */
     VirtualVRAM *vram;              /* Virtual VRAM for tile/map data */

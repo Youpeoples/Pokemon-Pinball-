@@ -405,6 +405,48 @@ static void reload_stage_data(GameState *state) {
  * Check for stage transition (ball moving between top/bottom halves).
  * Translated from CheckStageTransition (0xece9) / vertical_screen_transition.asm.
  */
+/* Instant half-swap for combined view mode. Swaps VRAM pointer, palettes,
+ * collision map, and sprite buffer without reloading assets from disk. */
+static void combined_view_swap_half(GameState *state, uint8_t half) {
+    state->combined_active_half = half;
+
+    /* Swap VRAM and palettes for rendering */
+    if (half == 0) {
+        state->vram = state->vram_top;
+        memcpy(state->bg_palettes, state->bg_palettes_top, sizeof(state->bg_palettes));
+        memcpy(state->obj_palettes, state->obj_palettes_top, sizeof(state->obj_palettes));
+    } else {
+        state->vram = state->vram_bottom;
+        memcpy(state->bg_palettes, state->bg_palettes_bottom, sizeof(state->bg_palettes));
+        memcpy(state->obj_palettes, state->obj_palettes_bottom, sizeof(state->obj_palettes));
+    }
+
+    /* Reload collision map + masks for the new half from disk.
+     * This is the same thing reload_stage_data does, but without
+     * reloading tile/tilemap assets (those are already in vram_top/bottom). */
+    load_stage_collision_attributes(state);
+
+    /* Clear sprite buffer (same as reload_stage_data) */
+    state->rumble_pattern = 0;
+    memset(state->sprite_buffer, 0, sizeof(state->sprite_buffer));
+    state->sprite_buffer_size = 0;
+    state->which_animated_voltorb = 0xFF;
+    state->which_bumper_gfx = 0xFF;
+    state->previous_field_structure_state = 0;
+
+    /* Reload flipper collision data if on a bottom stage */
+    if (STAGE_HAS_FLIPPERS(state->current_stage)) {
+        load_flipper_collision_data(state);
+    }
+
+    /* Set WY for scoreboard */
+    if (state->current_stage & 1) {
+        state->hram.wy = state->bottom_text_enabled ? 0x86 : 0x90;
+    } else {
+        state->hram.wy = 0x86;
+    }
+}
+
 static void check_stage_transition(GameState *state) {
     uint8_t ball_y = UFIXED_TO_INT(state->ball_y_pos);
     const PhysicsConfig *phys = &state->config->physics;
@@ -420,13 +462,21 @@ static void check_stage_transition(GameState *state) {
                 state->current_stage = STAGE_RED_FIELD_BOTTOM;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos -
                                                  phys->stage_transition_y_offset);
-                reload_stage_data(state);
+                if (state->combined_view_active) {
+                    combined_view_swap_half(state, 1);
+                } else {
+                    reload_stage_data(state);
+                }
                 return;
             case STAGE_BLUE_FIELD_TOP:
                 state->current_stage = STAGE_BLUE_FIELD_BOTTOM;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos -
                                                  phys->stage_transition_y_offset);
-                reload_stage_data(state);
+                if (state->combined_view_active) {
+                    combined_view_swap_half(state, 1);
+                } else {
+                    reload_stage_data(state);
+                }
                 return;
             default:
                 /* $FF entry: ball loss (bottom stages, bonus stages) */
@@ -443,13 +493,21 @@ static void check_stage_transition(GameState *state) {
                 state->current_stage = STAGE_RED_FIELD_TOP;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos +
                                                  phys->stage_transition_y_offset);
-                reload_stage_data(state);
+                if (state->combined_view_active) {
+                    combined_view_swap_half(state, 0);
+                } else {
+                    reload_stage_data(state);
+                }
                 return;
             case STAGE_BLUE_FIELD_BOTTOM:
                 state->current_stage = STAGE_BLUE_FIELD_TOP;
                 state->ball_y_pos = (ufixed8_8)((uint16_t)state->ball_y_pos +
                                                  phys->stage_transition_y_offset);
-                reload_stage_data(state);
+                if (state->combined_view_active) {
+                    combined_view_swap_half(state, 0);
+                } else {
+                    reload_stage_data(state);
+                }
                 return;
             default:
                 /* $FF entry: ball loss (top stages, bonus stages going up) */
@@ -581,7 +639,7 @@ static bool check_ball_lost(GameState *state) {
  * Helper: dispatch draw_sprites for the current stage.
  * Checks Lua hook first, falls back to C per-stage draw functions.
  */
-static void dispatch_draw_sprites(GameState *state) {
+static void draw_sprites_for_stage(GameState *state) {
     if (state->script_engine && state->script_engine->has_on_draw_sprites) {
         script_call_on_draw_sprites(state->script_engine, state->current_stage);
     } else if (state->current_stage <= STAGE_RED_FIELD_BOTTOM) {
@@ -598,6 +656,58 @@ static void dispatch_draw_sprites(GameState *state) {
         draw_diglett_bonus_sprites(state);
     } else if (state->current_stage == STAGE_SEEL_BONUS) {
         draw_seel_bonus_sprites(state);
+    }
+}
+
+static void dispatch_draw_sprites(GameState *state) {
+    /* Draw sprites for the active half (normal path) */
+    draw_sprites_for_stage(state);
+
+    /* In combined mode, also draw sprites for the other half */
+    if (state->combined_view_active &&
+        state->current_stage < FIRST_BONUS_STAGE) {
+        /* Save active half's sprite buffer */
+        OAMEntry saved_sprites[GBC_OAM_ENTRIES];
+        uint8_t saved_size = state->sprite_buffer_size;
+        memcpy(saved_sprites, state->sprite_buffer, sizeof(saved_sprites));
+
+        /* Determine the other half's stage */
+        uint8_t other_stage;
+        VirtualVRAM *other_vram;
+        if (state->combined_active_half == 0) {
+            /* Active is top, other is bottom */
+            other_stage = state->current_stage | 1;  /* set bit 0 for bottom */
+            other_vram = state->vram_bottom;
+        } else {
+            /* Active is bottom, other is top */
+            other_stage = state->current_stage & ~1;  /* clear bit 0 for top */
+            other_vram = state->vram_top;
+        }
+
+        /* Swap to other half temporarily */
+        uint8_t saved_stage = state->current_stage;
+        VirtualVRAM *saved_vram = state->vram;
+        uint8_t saved_ball_visible = state->pinball_is_visible;
+        state->current_stage = other_stage;
+        state->vram = other_vram;
+        state->pinball_is_visible = 0;  /* Don't draw ball on the other half */
+
+        /* Draw other half's sprites (without ball) */
+        draw_sprites_for_stage(state);
+
+        /* Save other half's sprites to secondary buffer */
+        memcpy(state->sprite_buffer_other, state->sprite_buffer,
+               sizeof(state->sprite_buffer_other));
+        state->sprite_buffer_other_size = state->sprite_buffer_size;
+
+        /* Restore active half */
+        state->current_stage = saved_stage;
+        state->vram = saved_vram;
+        state->pinball_is_visible = saved_ball_visible;
+        memcpy(state->sprite_buffer, saved_sprites, sizeof(state->sprite_buffer));
+        state->sprite_buffer_size = saved_size;
+    } else {
+        state->sprite_buffer_other_size = 0;
     }
 }
 
@@ -1017,6 +1127,11 @@ skip_ball_init:
             GBCPalette *src = is_bottom ? ed->playtest_palettes_bottom : ed->playtest_palettes_top;
             memcpy(state->bg_palettes, src, sizeof(GBCPalette) * 8);
         }
+
+        /* If combined view is active, reload both halves (e.g. after bonus stage return) */
+        if (state->combined_view_active) {
+            combined_view_load_both_halves(state);
+        }
     }
 
     /* Load flipper collision data if on a bottom stage */
@@ -1199,8 +1314,8 @@ static void pinball_handle_physics(GameState *state) {
     /* 4. Handle tilt input */
     handle_tilts(state);
 
-    /* 5. Handle flippers (only on bottom stages) */
-    if (STAGE_HAS_FLIPPERS(state->current_stage)) {
+    /* 5. Handle flippers (only on bottom stages, or always in combined view) */
+    if (STAGE_HAS_FLIPPERS(state->current_stage) || state->combined_view_active) {
         handle_flippers(state);
     }
 
@@ -1979,7 +2094,7 @@ static void pinball_handle_ball_loss(GameState *state) {
     state->hram.pressed_buttons = 0;
 
     handle_tilts(state);
-    if (STAGE_HAS_FLIPPERS(state->current_stage)) {
+    if (STAGE_HAS_FLIPPERS(state->current_stage) || state->combined_view_active) {
         handle_flippers(state);
     }
 

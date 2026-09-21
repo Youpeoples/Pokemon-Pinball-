@@ -11,6 +11,7 @@
 #include "data/embedded_data.h"
 #include "game/game_state.h"
 #include "game/config_data.h"
+#include "game/collision.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -895,4 +896,60 @@ bool load_screen_assets(uint8_t screen_id, VirtualVRAM *vram,
     }
 
     return success;
+}
+
+void combined_view_load_both_halves(GameState *state) {
+    /* Determine which field (red/blue) based on current stage */
+    uint8_t top_stage, bottom_stage;
+    if (state->current_stage == STAGE_RED_FIELD_TOP ||
+        state->current_stage == STAGE_RED_FIELD_BOTTOM) {
+        top_stage = STAGE_RED_FIELD_TOP;
+        bottom_stage = STAGE_RED_FIELD_BOTTOM;
+    } else if (state->current_stage == STAGE_BLUE_FIELD_TOP ||
+               state->current_stage == STAGE_BLUE_FIELD_BOTTOM) {
+        top_stage = STAGE_BLUE_FIELD_TOP;
+        bottom_stage = STAGE_BLUE_FIELD_BOTTOM;
+    } else {
+        /* Bonus stage -- don't load combined view data */
+        return;
+    }
+
+    /* Save current palettes — load_stage_assets overwrites them */
+    GBCPalette saved_bg[8], saved_obj[8];
+    memcpy(saved_bg, state->bg_palettes, sizeof(saved_bg));
+    memcpy(saved_obj, state->obj_palettes, sizeof(saved_obj));
+
+    /* Load top half VISUAL assets (tiles, tilemaps, palettes) into vram_top */
+    printf("Combined view: loading top half (stage 0x%02X)\n", top_stage);
+    load_stage_assets(top_stage, state->vram_top, state, state->asset_base_path);
+    memcpy(state->bg_palettes_top, state->bg_palettes, sizeof(state->bg_palettes_top));
+    memcpy(state->obj_palettes_top, state->obj_palettes, sizeof(state->obj_palettes_top));
+
+    /* Load bottom half VISUAL assets into vram_bottom */
+    printf("Combined view: loading bottom half (stage 0x%02X)\n", bottom_stage);
+    load_stage_assets(bottom_stage, state->vram_bottom, state, state->asset_base_path);
+    memcpy(state->bg_palettes_bottom, state->bg_palettes, sizeof(state->bg_palettes_bottom));
+    memcpy(state->obj_palettes_bottom, state->obj_palettes, sizeof(state->obj_palettes_bottom));
+
+    /* Restore original palettes (active half's palettes should stay unchanged) */
+    memcpy(state->bg_palettes, saved_bg, sizeof(saved_bg));
+    memcpy(state->obj_palettes, saved_obj, sizeof(saved_obj));
+
+    /* Determine active half from current stage (odd = bottom) */
+    state->combined_active_half = (state->current_stage & 1) ? 1 : 0;
+
+    /* Point VRAM to active half's data for sprite tile lookup */
+    if (state->combined_active_half == 0) {
+        state->vram = state->vram_top;
+    } else {
+        state->vram = state->vram_bottom;
+    }
+
+    /* DO NOT touch collision state — the collision map and masks are already
+     * correct for the current half from normal gameplay. Collision will be
+     * reloaded via load_stage_collision_attributes() when the ball transitions
+     * between halves (in combined_view_swap_half). */
+
+    printf("Combined view: loaded both halves (active=%s)\n",
+           state->combined_active_half ? "bottom" : "top");
 }

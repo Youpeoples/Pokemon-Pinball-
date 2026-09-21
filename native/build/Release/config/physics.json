@@ -1,0 +1,62 @@
+{
+    "_comment": "Physics configuration for Pokemon Pinball+. Values are in real units (pixels, pixels/frame). Converted to fixed-point 8.8 internally.",
+
+    "gravity": 0.043,
+    "_comment_gravity": "Pixels/frame^2 added to Y velocity each frame. Original: 0.043 (11/256)",
+
+    "max_velocity_hi": 7,
+    "_comment_max_velocity_hi": "Maximum velocity in whole pixels/frame. Velocity clamped to +/-7",
+
+    "position_clamp_positive": 4.996,
+    "_comment_position_clamp_positive": "Max position delta per frame (positive direction, ~5 pixels)",
+
+    "position_clamp_negative": -4.996,
+    "_comment_position_clamp_negative": "Max position delta per frame (negative direction, ~-5 pixels)",
+
+    "stage_transition_up_y": 8,
+    "_comment_stage_transition_up_y": "Ball Y pixel position threshold to scroll up to top half",
+
+    "stage_transition_down_y": 168,
+    "_comment_stage_transition_down_y": "Ball Y pixel position threshold to scroll down to bottom half",
+
+    "stage_transition_y_offset": 136.0,
+    "_comment_stage_transition_y_offset": "Pixel Y offset applied during stage transition (136 pixels)",
+
+    "flipper_delta": 3.2,
+    "_comment_flipper_delta": "Flipper angular speed per frame (out of 15.0 max)",
+
+    "flipper_max": 15.0,
+    "_comment_flipper_max": "Maximum flipper angular position (16 positions: 0-15)",
+
+    "flipper_radius_magnitudes": [
+        0, 12, 28, 48, 56, 72, 92, 108,
+        112, 128, 148, 164, 180, 196, 212, 228,
+        248, 252, 252, 252, 252, 252, 252, 252,
+        252, 252, 252, 252, 252, 252, 252, 252
+    ],
+    "_comment_flipper_radius_magnitudes": "32 force magnitude values indexed by flipper collision radius (0-255). Higher = more force.",
+
+    "flipper_collision_x_min": 43,
+    "_comment_flipper_collision_x_min": "Minimum ball X position for flipper collision detection",
+
+    "flipper_collision_x_range": 48,
+    "_comment_flipper_collision_x_range": "X range from min for flipper collision (ball X must be < min + range)",
+
+    "flipper_collision_y_min": 123,
+    "_comment_flipper_collision_y_min": "Minimum ball Y position for flipper collision detection",
+
+    "flipper_collision_y_range": 32,
+    "_comment_flipper_collision_y_range": "Y range from min for flipper collision (ball Y must be < min + range)",
+
+    "damping_shift": 2,
+    "_comment_damping_shift": "Right-shift for velocity damping on collision (2 = divide by 4)",
+
+    "amplification_shift": 3,
+    "_comment_amplification_shift": "Right-shift for amplification increment (3 = divide by 8, added per amplification unit)",
+
+    "spin_transfer_shift": 1,
+    "_comment_spin_transfer_shift": "Right-shift for spin-to-velocity transfer (1 = half of ball_spin added to X velocity)",
+
+    "spin_recalc_shift": 2,
+    "_comment_spin_recalc_shift": "Left-shift for spin recalculation from X velocity (2 = X * 4, then >> 8 for new spin)"
+}

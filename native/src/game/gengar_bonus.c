@@ -1266,7 +1266,8 @@ void resolve_gengar_bonus_object_collisions(GameState *state) {
             /* Bounce direction comes from tile collision, not AABB.
              * ASM: HandleGameObjectCollision uses IsCollisionInList to
              * gate on tile attribute — tile collision handles the force. */
-            PLAY_SFX(state, "gengar_bonus_clear", 0x00, 0x2F);
+            /* ASM uses PlaySFXIfNoneActive here — only play if no SFX channel busy */
+            audio_play_sfx_if_none_active(state->audio, 0x00, 0x2F);
         }
         (void)grav;
     }

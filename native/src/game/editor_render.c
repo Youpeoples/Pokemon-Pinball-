@@ -418,7 +418,7 @@ static void render_objects(EditorState *editor, SDL_Renderer *sdl_r) {
         EditorObject *obj = &editor->table.objects[i];
 
         int cx = world_to_screen_x(editor, (float)obj->x);
-        int cy = world_to_screen_y(editor, (float)obj->y);
+        int cy = world_to_screen_y(editor, (float)(obj->y - OBJECT_Y_DISPLAY_OFFSET));
         int hw = (int)(obj->x_thresh * editor->zoom);
         int hh = (int)(obj->y_thresh * editor->zoom);
 
@@ -1929,6 +1929,51 @@ static void render_left_panel(EditorState *editor, SDL_Renderer *sdl_r, int win_
             LP_DIM("Click collision tile to");
             LP_DIM("select it (with C overlay).");
             LP_DIM("Drag to move coll tile.");
+            LP_GAP();
+
+            LP_SEC("OBJECT LINKING");
+            LP("Links define interactions");
+            LP("between objects (e.g. hit A");
+            LP("to activate B).");
+            LP_GAP();
+            LP("1. Select a source object");
+            LP("2. Press L to start linking");
+            LP("3. Click a target object");
+            LP("4. Link is created!");
+            LP_GAP();
+            LP_KEY("L        Start/cycle link");
+            LP_DIM("  While linking, press L");
+            LP_DIM("  again to cycle type:");
+            LP_DIM("  Triggers > Charges >");
+            LP_DIM("  Toggles > Sequence");
+            LP_KEY("I        Toggle link arrows");
+            LP_KEY("ESC      Cancel linking");
+            LP_GAP();
+            LP_DIM("Triggers: A fires B once.");
+            LP_DIM("Charges: Hit A N times to");
+            LP_DIM("  fire B (set threshold).");
+            LP_DIM("Toggles: A flips B on/off.");
+            LP_DIM("Sequence: A must be hit");
+            LP_DIM("  before B becomes active.");
+            LP_GAP();
+            LP_DIM("Select a link in inspector");
+            LP_DIM("(right panel) to edit type,");
+            LP_DIM("threshold. Del to remove.");
+            LP_GAP();
+
+            LP_SEC("BEHAVIOR TEMPLATES");
+            LP("Pre-built object + link");
+            LP("setups placed in one click.");
+            LP_GAP();
+            LP_KEY("T        Open template picker");
+            LP_DIM("  (no object selected)");
+            LP("1. Press T to see templates");
+            LP("2. Up/Dn to browse, Enter");
+            LP("3. Click viewport to place");
+            LP("4. ESC to cancel placement");
+            LP_GAP();
+            LP_DIM("Templates auto-wire links.");
+            LP_DIM("Edit objects/links after.");
             break;
 
         case TOOL_PLACE:
@@ -2036,7 +2081,7 @@ static void render_left_panel(EditorState *editor, SDL_Renderer *sdl_r, int win_
         /* ---- Switch tool (compact) ---- */
         LP_SEC("SWITCH TOOL");
         LP_KEY("S Select  P Place  E Erase");
-        LP_KEY("T Tile    X Coll   L Palette");
+        LP_KEY("T Tile    X Coll   K Palette");
 
         /* ---- Quick reference ---- */
         LP_SEC("FILE");
@@ -2103,7 +2148,7 @@ static void render_left_panel(EditorState *editor, SDL_Renderer *sdl_r, int win_
         /* ---- Switch tool (compact) ---- */
         LP_SEC("SWITCH TOOL");
         LP_KEY("S Select  P Place  E Erase");
-        LP_KEY("T Tile    X Coll   L Palette");
+        LP_KEY("T Tile    X Coll   K Palette");
     }
 
     /* ---- Status (shown on both tabs) ---- */
@@ -2121,6 +2166,10 @@ static void render_left_panel(EditorState *editor, SDL_Renderer *sdl_r, int win_
             snprintf(buf, sizeof(buf), "Grid: %s  Coll: %s",
                      editor->snap_to_grid ? "ON" : "OFF",
                      editor->show_collision_overlay ? "ON" : "OFF");
+            LP(buf);
+            snprintf(buf, sizeof(buf), "Links: %s  (%d total)",
+                     editor->show_link_overlay ? "ON" : "OFF",
+                     editor->table.num_links);
             LP(buf);
             if (editor->show_flipper_sweep) {
                 int aset = (editor->flipper_anim_angle <= 6) ? 0 :
@@ -2503,7 +2552,7 @@ static void render_help_bar(EditorState *editor, SDL_Renderer *sdl_r, int win_w)
         draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  Alt:Sample  M:Mask  Q:Pts",
             0xA0A0A0FF, s);
     } else {
-        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  L:Pal",
+        draw_text_s(sdl_r, 4, 3, "^S:Save ^Z:Undo F5:Play  I:Links  T:Tmpl",
             0xA0A0A0FF, s);
     }
 }
@@ -2594,6 +2643,390 @@ static void render_picker_screen(EditorState *editor, SDL_Renderer *sdl_r, int w
 }
 
 /*=============================================================================
+ * Link Overlay Colors
+ *===========================================================================*/
+#define COL_LINK_TRIGGERS   0xFFDD00FF
+#define COL_LINK_CHARGES    0x00DDFFFF
+#define COL_LINK_TOGGLES    0xFF00DDFF
+#define COL_LINK_SEQUENCE   0x00FF88FF
+
+static uint32_t link_type_color(LinkType type) {
+    switch (type) {
+        case LINK_TRIGGERS: return COL_LINK_TRIGGERS;
+        case LINK_CHARGES:  return COL_LINK_CHARGES;
+        case LINK_TOGGLES:  return COL_LINK_TOGGLES;
+        case LINK_SEQUENCE: return COL_LINK_SEQUENCE;
+        default: return 0xFFFFFFFF;
+    }
+}
+
+/* Apply alpha to a color (multiply existing alpha) */
+static uint32_t color_with_alpha(uint32_t color, uint8_t alpha) {
+    uint8_t orig_a = color & 0xFF;
+    uint8_t new_a = (uint8_t)((orig_a * alpha) / 255);
+    return (color & 0xFFFFFF00) | new_a;
+}
+
+/*=============================================================================
+ * Render: Arrow (line + arrowhead)
+ *===========================================================================*/
+
+static void draw_arrow(SDL_Renderer *r, int x1, int y1, int x2, int y2,
+                       uint32_t color, int thickness) {
+    /* Draw the line body */
+    set_draw_color(r, color);
+    SDL_RenderDrawLine(r, x1, y1, x2, y2);
+
+    /* Draw thicker by offset lines */
+    for (int t = 1; t < thickness; t++) {
+        SDL_RenderDrawLine(r, x1, y1 + t, x2, y2 + t);
+        SDL_RenderDrawLine(r, x1 + t, y1, x2 + t, y2);
+    }
+
+    /* Arrowhead: compute direction vector */
+    float dx = (float)(x2 - x1);
+    float dy = (float)(y2 - y1);
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 1.0f) return;
+
+    float ux = dx / len;
+    float uy = dy / len;
+
+    /* Arrowhead size */
+    float arrow_size = 8.0f;
+
+    /* Two points of the arrowhead */
+    float ax1 = x2 - ux * arrow_size - uy * arrow_size * 0.5f;
+    float ay1 = y2 - uy * arrow_size + ux * arrow_size * 0.5f;
+    float ax2 = x2 - ux * arrow_size + uy * arrow_size * 0.5f;
+    float ay2 = y2 - uy * arrow_size - ux * arrow_size * 0.5f;
+
+    SDL_RenderDrawLine(r, x2, y2, (int)ax1, (int)ay1);
+    SDL_RenderDrawLine(r, x2, y2, (int)ax2, (int)ay2);
+}
+
+/*=============================================================================
+ * Render: Link Graph Overlay
+ *===========================================================================*/
+
+static void render_link_overlay(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (!editor->show_link_overlay && !editor->linking) return;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    for (int i = 0; i < editor->table.num_links; i++) {
+        ObjectLink *link = &editor->table.links[i];
+        if (link->source_idx < 0 || link->source_idx >= editor->table.num_objects) continue;
+        if (link->target_idx < 0 || link->target_idx >= editor->table.num_objects) continue;
+
+        EditorObject *src = &editor->table.objects[link->source_idx];
+        EditorObject *tgt = &editor->table.objects[link->target_idx];
+
+        /* Convert to screen coords (apply Y display offset for tilemap alignment) */
+        int sx = world_to_screen_x(editor, (float)src->x);
+        int sy = world_to_screen_y(editor, (float)(src->y - OBJECT_Y_DISPLAY_OFFSET));
+        int tx = world_to_screen_x(editor, (float)tgt->x);
+        int ty = world_to_screen_y(editor, (float)(tgt->y - OBJECT_Y_DISPLAY_OFFSET));
+
+        uint32_t color = link_type_color(link->type);
+        int thickness = 1;
+
+        /* Determine opacity based on selection */
+        bool is_selected = (i == editor->selected_link);
+        bool involves_selected_obj = (editor->selected_object >= 0 &&
+            (link->source_idx == editor->selected_object ||
+             link->target_idx == editor->selected_object));
+
+        if (is_selected) {
+            thickness = 3;
+        } else if (editor->selected_object >= 0 && !involves_selected_obj) {
+            color = color_with_alpha(color, 77);  /* ~30% opacity */
+        }
+
+        draw_arrow(sdl_r, sx, sy, tx, ty, color, thickness);
+
+        /* For CHARGES links, draw threshold badge at midpoint */
+        if (link->type == LINK_CHARGES) {
+            int mx = (sx + tx) / 2;
+            int my = (sy + ty) / 2;
+            int s = editor->ui_scale;
+            int badge_r = 4 * s;
+            fill_rect(sdl_r, mx - badge_r, my - badge_r, badge_r * 2, badge_r * 2,
+                      0x000000C0);
+            char num[8];
+            snprintf(num, sizeof(num), "%d", link->threshold);
+            draw_text_s(sdl_r, mx - 2 * s, my - 3 * s, num, COL_LINK_CHARGES, s);
+        }
+    }
+
+    /* Link mode rubber-band line */
+    if (editor->linking && editor->link_mode_source >= 0 &&
+        editor->link_mode_source < editor->table.num_objects) {
+        EditorObject *src = &editor->table.objects[editor->link_mode_source];
+        int sx = world_to_screen_x(editor, (float)src->x);
+        int sy = world_to_screen_y(editor, (float)(src->y - OBJECT_Y_DISPLAY_OFFSET));
+        int mx = editor->mouse_x;
+        int my = editor->mouse_y;
+
+        /* Dashed line effect: draw segments */
+        uint32_t dash_color = link_type_color((LinkType)editor->link_type_cycle);
+        set_draw_color(sdl_r, dash_color);
+
+        float dx = (float)(mx - sx);
+        float dy = (float)(my - sy);
+        float len = sqrtf(dx * dx + dy * dy);
+        if (len > 1.0f) {
+            float ux = dx / len;
+            float uy = dy / len;
+            for (float t = 0; t < len; t += 12.0f) {
+                float end = t + 6.0f;
+                if (end > len) end = len;
+                int x1 = (int)(sx + ux * t);
+                int y1 = (int)(sy + uy * t);
+                int x2 = (int)(sx + ux * end);
+                int y2 = (int)(sy + uy * end);
+                SDL_RenderDrawLine(sdl_r, x1, y1, x2, y2);
+            }
+        }
+
+        /* Show link type label near mouse */
+        int s = editor->ui_scale;
+        const char *type_name = editor_link_type_name((LinkType)editor->link_type_cycle);
+        draw_text_s(sdl_r, mx + 8, my - 8, type_name, dash_color, s);
+        draw_text_s(sdl_r, mx + 8, my + 2 * s, "(L=cycle type)", 0x808080FF, s);
+    }
+}
+
+/*=============================================================================
+ * Render: Link Inspector (below object inspector when object selected)
+ *===========================================================================*/
+
+static void render_link_inspector(EditorState *editor, SDL_Renderer *sdl_r,
+                                   int win_w, int win_h) {
+    if (editor->selected_object < 0) return;
+
+    int s = editor->ui_scale;
+    int row_h = 7 * s + 2;
+    int pad = 4;
+    int iw = SIDEBAR_BASE_W;
+    int ix = 0;
+
+    /* Calculate Y position: below the object inspector.
+     * Object inspector has ~11 rows (title, type, x, y, xthr, ythr, score, force, sfx, gate, sep, hints*3).
+     * Start after that. */
+    int iy = 8 * s + (row_h + 4) + row_h * 9 + 4 + 6 + row_h * 3 + 16;
+
+    /* Check if there are any links involving this object */
+    int link_count = 0;
+    for (int i = 0; i < editor->table.num_links; i++) {
+        if (editor->table.links[i].source_idx == editor->selected_object ||
+            editor->table.links[i].target_idx == editor->selected_object) {
+            link_count++;
+        }
+    }
+
+    if (link_count == 0 && !editor->linking) return;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    int panel_h = row_h * (link_count + 2) + 12;
+    fill_rect(sdl_r, ix, iy, iw, panel_h, 0x1A1A1AE8);
+
+    int label_x = ix + pad;
+
+    /* Section header */
+    draw_text_s(sdl_r, label_x, iy + 2, "-- Links --", 0x80FFFFFF, s);
+    iy += row_h + 4;
+
+    /* List links */
+    for (int i = 0; i < editor->table.num_links; i++) {
+        ObjectLink *link = &editor->table.links[i];
+        if (link->source_idx != editor->selected_object &&
+            link->target_idx != editor->selected_object) continue;
+
+        bool is_outgoing = (link->source_idx == editor->selected_object);
+        bool is_selected = (i == editor->selected_link);
+        uint32_t row_color = is_selected ? 0x404060FF : 0x2A2A2AFF;
+        fill_rect(sdl_r, ix + 2, iy, iw - 4, row_h, row_color);
+
+        /* Arrow direction + target name */
+        char link_label[80];
+        int other_idx = is_outgoing ? link->target_idx : link->source_idx;
+        const char *dir = is_outgoing ? "->" : "<-";
+        const char *type_name = editor_link_type_name(link->type);
+
+        if (other_idx >= 0 && other_idx < editor->table.num_objects) {
+            const char *comp_name = editor_component_name(
+                editor->table.objects[other_idx].type);
+            if (link->type == LINK_CHARGES) {
+                snprintf(link_label, sizeof(link_label), "%s %s#%d [%s %d]",
+                         dir, comp_name, other_idx, type_name, link->threshold);
+            } else {
+                snprintf(link_label, sizeof(link_label), "%s %s#%d [%s]",
+                         dir, comp_name, other_idx, type_name);
+            }
+        } else {
+            snprintf(link_label, sizeof(link_label), "%s ???#%d [%s]",
+                     dir, other_idx, type_name);
+        }
+
+        uint32_t text_col = link_type_color(link->type);
+        draw_text_s(sdl_r, label_x + 2, iy + 1, link_label, text_col, s);
+
+        /* Click to select link */
+        if (editor->mouse_left_clicked &&
+            editor->mouse_x >= ix && editor->mouse_x < ix + iw &&
+            editor->mouse_y >= iy && editor->mouse_y < iy + row_h) {
+            editor->selected_link = i;
+        }
+
+        iy += row_h;
+    }
+
+    /* "L: Add Link" hint */
+    draw_text_s(sdl_r, label_x, iy + 2, "[L] Add Link", 0x808080FF, s);
+
+    /* Show selected link details */
+    if (editor->selected_link >= 0 && editor->selected_link < editor->table.num_links) {
+        ObjectLink *link = &editor->table.links[editor->selected_link];
+        iy += row_h + 4;
+        char detail[64];
+        snprintf(detail, sizeof(detail), "Type: %s (</>)",
+                 editor_link_type_name(link->type));
+        draw_text_s(sdl_r, label_x, iy, detail, COL_TEXT_WHITE, s);
+        iy += row_h;
+        if (link->type == LINK_CHARGES) {
+            snprintf(detail, sizeof(detail), "Thresh: %d (^/v)", link->threshold);
+            draw_text_s(sdl_r, label_x, iy, detail, COL_TEXT_WHITE, s);
+            iy += row_h;
+        }
+        snprintf(detail, sizeof(detail), "Timer: %d", link->timer_frames);
+        draw_text_s(sdl_r, label_x, iy, detail, COL_TEXT_DIM, s);
+        iy += row_h;
+        draw_text_s(sdl_r, label_x, iy, "Del: Remove link", 0x808080FF, s);
+    }
+}
+
+/*=============================================================================
+ * Render: Template Picker Popup
+ *===========================================================================*/
+
+static void render_template_picker(EditorState *editor, SDL_Renderer *sdl_r,
+                                    int win_w, int win_h) {
+    if (!editor->template_picker_open) return;
+
+    int s = editor->ui_scale;
+    int row_h = 7 * s + 4;
+    int pad = 8 * s;
+    int popup_w = 60 * (4 + 1) * s;
+    int popup_h = row_h * (NUM_BEHAVIOR_TEMPLATES + 2) + pad * 2;
+    int popup_x = (win_w - popup_w) / 2;
+    int popup_y = (win_h - popup_h) / 2;
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    fill_rect(sdl_r, popup_x, popup_y, popup_w, popup_h, 0x181818F0);
+    draw_rect_outline(sdl_r, popup_x, popup_y, popup_w, popup_h, 0x606060FF);
+
+    int tx = popup_x + pad;
+    int ty = popup_y + pad;
+
+    draw_text_s(sdl_r, tx, ty, "BEHAVIOR TEMPLATES", 0x80C0FFFF, s + 1);
+    ty += row_h + 4;
+
+    const BehaviorTemplate *templates = editor_get_templates();
+    for (int i = 0; i < NUM_BEHAVIOR_TEMPLATES; i++) {
+        bool selected = (i == editor->template_cursor);
+        uint32_t bg = selected ? 0x404060FF : 0x2A2A2AFF;
+        fill_rect(sdl_r, tx - 2, ty, popup_w - pad * 2 + 4, row_h - 2, bg);
+
+        if (selected) {
+            fill_rect(sdl_r, tx - 2, ty, 3 * s, row_h - 2, 0x80C0FFFF);
+        }
+
+        draw_text_s(sdl_r, tx + 4 * s, ty + 1, templates[i].name,
+                    selected ? COL_TEXT_WHITE : COL_TEXT_DIM, s);
+
+        /* Description on same line, dimmer */
+        int name_w = text_width_s(templates[i].name, s);
+        draw_text_s(sdl_r, tx + 4 * s + name_w + 4 * s, ty + 1,
+                    templates[i].description, 0x606060FF, s);
+
+        ty += row_h;
+    }
+
+    ty += 4;
+    draw_text_s(sdl_r, tx, ty, "Enter: Select  ESC: Cancel", 0x808080FF, s);
+}
+
+/*=============================================================================
+ * Render: Template Ghost Preview (follows mouse during placement)
+ *===========================================================================*/
+
+static void render_template_ghost(EditorState *editor, SDL_Renderer *sdl_r) {
+    if (!editor->template_placing) return;
+    if (editor->template_selected < 0 || editor->template_selected >= NUM_BEHAVIOR_TEMPLATES)
+        return;
+
+    const BehaviorTemplate *tmpl = &editor_get_templates()[editor->template_selected];
+
+    /* Get mouse world position */
+    float world_x = editor->camera_x + (float)editor->mouse_x / editor->zoom;
+    float world_y = editor->camera_y + (float)editor->mouse_y / editor->zoom;
+    int cx = (int)world_x;
+    int cy = (int)world_y;
+    if (editor->snap_to_grid) {
+        cx = (cx / editor->grid_size) * editor->grid_size;
+        cy = (cy / editor->grid_size) * editor->grid_size;
+    }
+
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+
+    /* Draw ghost objects at relative positions */
+    for (int i = 0; i < tmpl->num_objects; i++) {
+        int ox = cx + tmpl->objects[i].dx;
+        int oy = cy + tmpl->objects[i].dy;
+
+        int sx = world_to_screen_x(editor, (float)ox);
+        int sy = world_to_screen_y(editor, (float)oy);
+
+        uint8_t xt, yt;
+        editor_component_default_bbox(tmpl->objects[i].type, &xt, &yt);
+        int bw = (int)(xt * 2 * editor->zoom);
+        int bh = (int)(yt * 2 * editor->zoom);
+
+        /* Ghost box */
+        uint32_t ghost_col = 0xFFFFFF40;
+        if (tmpl->objects[i].type < sizeof(comp_colors) / sizeof(comp_colors[0])) {
+            ghost_col = color_with_alpha(comp_colors[tmpl->objects[i].type], 100);
+        }
+        fill_rect(sdl_r, sx - bw / 2, sy - bh / 2, bw, bh, ghost_col);
+        draw_rect_outline(sdl_r, sx - bw / 2, sy - bh / 2, bw, bh, 0xFFFFFF80);
+    }
+
+    /* Draw ghost links between objects */
+    for (int i = 0; i < tmpl->num_links; i++) {
+        int s1 = tmpl->links[i].src;
+        int d1 = tmpl->links[i].dst;
+        if (s1 < 0 || s1 >= tmpl->num_objects || d1 < 0 || d1 >= tmpl->num_objects)
+            continue;
+
+        int sx1 = world_to_screen_x(editor, (float)(cx + tmpl->objects[s1].dx));
+        int sy1 = world_to_screen_y(editor, (float)(cy + tmpl->objects[s1].dy));
+        int sx2 = world_to_screen_x(editor, (float)(cx + tmpl->objects[d1].dx));
+        int sy2 = world_to_screen_y(editor, (float)(cy + tmpl->objects[d1].dy));
+
+        uint32_t lcol = color_with_alpha(link_type_color(tmpl->links[i].type), 128);
+        draw_arrow(sdl_r, sx1, sy1, sx2, sy2, lcol, 1);
+    }
+
+    /* Label */
+    int s = editor->ui_scale;
+    draw_text_s(sdl_r, editor->mouse_x + 12, editor->mouse_y - 12,
+                tmpl->name, COL_TEXT_WHITE, s);
+    draw_text_s(sdl_r, editor->mouse_x + 12, editor->mouse_y,
+                "Click to place", 0x808080FF, s);
+}
+
+/*=============================================================================
  * Main Viewport Render — dispatches based on editor screen
  *===========================================================================*/
 
@@ -2641,7 +3074,9 @@ void editor_render_viewport(EditorState *editor, Renderer *renderer, Platform *p
     render_viewport_indicators(editor, sdl_r);
     render_grid(editor, sdl_r);
     render_objects(editor, sdl_r);
+    render_link_overlay(editor, sdl_r);
     render_placement_ghost(editor, sdl_r);
+    render_template_ghost(editor, sdl_r);
 
     /* Ball test point overlay (before UI panels, on top of collision overlay) */
     if (editor->mask_editor && editor->game_state_ref) {
@@ -2653,12 +3088,16 @@ void editor_render_viewport(EditorState *editor, Renderer *renderer, Platform *p
     render_left_panel(editor, sdl_r, win_w, win_h);
     render_sidebar(editor, sdl_r, win_w, win_h);
     render_inspector(editor, sdl_r, win_w, win_h);
+    render_link_inspector(editor, sdl_r, win_w, win_h);
     render_collision_inspector(editor, sdl_r, win_w, win_h);
     render_checklist(editor, sdl_r, win_w, win_h);
     render_collision_tooltip(editor, sdl_r);
     render_tile_inspector(editor, sdl_r, win_w, win_h);
     render_status_bar(editor, sdl_r, win_w, win_h);
     render_help_bar(editor, sdl_r, win_w);
+
+    /* Template picker popup (modal) */
+    render_template_picker(editor, sdl_r, win_w, win_h);
 
     /* Mask pixel editor panel (modal, drawn on top of everything) */
     if (editor->mask_editor) {

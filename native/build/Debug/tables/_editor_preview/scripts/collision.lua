@@ -2,9 +2,208 @@
 -- Table: "Blue Field"
 -- Do not edit above this line (regenerated on save)
 
+-- Bumper #1 at (58, 86)
+local function resolve_bumper_1()
+    pinball.set_state("flipper_y_force", 0x0200)
+    pinball.rumble(0xFF, 3)
+    pinball.add_score("score_500")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Bumper #2 at (79, 69)
+local function resolve_bumper_2()
+    pinball.set_state("flipper_y_force", 0x0200)
+    pinball.rumble(0xFF, 3)
+    pinball.add_score("score_500")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Bumper #3 at (100, 86)
+local function resolve_bumper_3()
+    pinball.set_state("flipper_y_force", 0x0200)
+    pinball.rumble(0xFF, 3)
+    pinball.add_score("score_500")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Spinner #1 at (146, 106)
+local function resolve_spinner_1()
+    pinball.add_score("score_100")
+    pinball.play_sfx_raw(0x00, 0x14)
+end
+
+-- Board Trigger #1 at (21, 67)
+local function resolve_board_trigger_1()
+    -- Board trigger: increment bonus multiplier
+    pinball.play_sfx_raw(0x00, 0x00)
+end
+
+-- Board Trigger #2 at (139, 67)
+local function resolve_board_trigger_2()
+    -- Board trigger: increment bonus multiplier
+    pinball.play_sfx_raw(0x00, 0x00)
+end
+
+-- Board Trigger #3 at (16, 140)
+local function resolve_board_trigger_3()
+    -- Board trigger: increment bonus multiplier
+    pinball.play_sfx_raw(0x00, 0x00)
+end
+
+-- Board Trigger #4 at (143, 140)
+local function resolve_board_trigger_4()
+    -- Board trigger: increment bonus multiplier
+    pinball.play_sfx_raw(0x00, 0x00)
+end
+
+-- Field Creature #1 at (44, 120)
+local function resolve_field_creature_1()
+    pinball.add_score("score_100")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Field Creature #2 at (115, 120)
+local function resolve_field_creature_2()
+    pinball.add_score("score_100")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Ball Upgrade #1 at (55, 52)
+local function resolve_ball_upgrade_1()
+    -- Ball upgrade trigger
+    pinball.play_sfx_raw(0x00, 0x17)
+end
+
+-- Ball Upgrade #2 at (79, 47)
+local function resolve_ball_upgrade_2()
+    -- Ball upgrade trigger
+    pinball.play_sfx_raw(0x00, 0x17)
+end
+
+-- Ball Upgrade #3 at (103, 53)
+local function resolve_ball_upgrade_3()
+    -- Ball upgrade trigger
+    pinball.play_sfx_raw(0x00, 0x17)
+end
+
+-- Wild Pokemon #1 at (80, 208)
+local function resolve_wild_pokemon_1()
+    -- TODO: implement Wild Pokemon collision handler
+end
+
+-- Field Creature #3 at (34, 206)
+local function resolve_field_creature_3()
+    pinball.add_score("score_100")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Field Creature #4 at (125, 205)
+local function resolve_field_creature_4()
+    pinball.add_score("score_100")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Railing #1 at (44, 176)
+local function resolve_railing_1()
+    -- TODO: implement Railing collision handler
+end
+
+-- Railing #2 at (116, 176)
+local function resolve_railing_2()
+    -- TODO: implement Railing collision handler
+end
+
+-- Slot Machine #1 at (80, 166)
+local function resolve_slot_machine_1()
+    -- TODO: implement Slot Machine collision handler
+end
+
+-- Bumper #4 at (48, 246)
+local function resolve_bumper_4()
+    pinball.set_state("flipper_y_force", 0x0200)
+    pinball.rumble(0xFF, 3)
+    pinball.add_score("score_500")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Bumper #5 at (111, 246)
+local function resolve_bumper_5()
+    pinball.set_state("flipper_y_force", 0x0200)
+    pinball.rumble(0xFF, 3)
+    pinball.add_score("score_500")
+    pinball.play_sfx_raw(0x00, 0x0E)
+end
+
+-- Pikachu Saver #1 at (14, 268)
+local function resolve_pikachu_saver_1()
+    -- TODO: implement Pikachu Saver collision handler
+end
+
+-- Pikachu Saver #2 at (146, 268)
+local function resolve_pikachu_saver_2()
+    -- TODO: implement Pikachu Saver collision handler
+end
+
+-- CAVE Light #1 at (14, 245)
+local function resolve_cave_light_1()
+    -- CAVE light trigger
+    pinball.play_sfx_raw(0x00, 0x1B)
+end
+
+-- CAVE Light #2 at (30, 245)
+local function resolve_cave_light_2()
+    -- CAVE light trigger
+    pinball.play_sfx_raw(0x00, 0x1B)
+end
+
+-- CAVE Light #3 at (130, 245)
+local function resolve_cave_light_3()
+    -- CAVE light trigger
+    pinball.play_sfx_raw(0x00, 0x1B)
+end
+
+-- CAVE Light #4 at (146, 245)
+local function resolve_cave_light_4()
+    -- CAVE light trigger
+    pinball.play_sfx_raw(0x00, 0x1B)
+end
+
+-- Launch Alley #1 at (168, 296)
+local function resolve_launch_alley_1()
+    -- TODO: implement Launch Alley collision handler
+end
+
 function on_object_collision(collision_id, ball_x, ball_y)
     local stage = pinball.get_current_stage()
     if stage == 4 then
+        resolve_bumper_1()
+        resolve_bumper_2()
+        resolve_bumper_3()
+        resolve_spinner_1()
+        resolve_board_trigger_1()
+        resolve_board_trigger_2()
+        resolve_board_trigger_3()
+        resolve_board_trigger_4()
+        resolve_field_creature_1()
+        resolve_field_creature_2()
+        resolve_ball_upgrade_1()
+        resolve_ball_upgrade_2()
+        resolve_ball_upgrade_3()
+        resolve_wild_pokemon_1()
+        resolve_field_creature_3()
+        resolve_field_creature_4()
+        resolve_railing_1()
+        resolve_railing_2()
+        resolve_slot_machine_1()
+        resolve_bumper_4()
+        resolve_bumper_5()
+        resolve_pikachu_saver_1()
+        resolve_pikachu_saver_2()
+        resolve_cave_light_1()
+        resolve_cave_light_2()
+        resolve_cave_light_3()
+        resolve_cave_light_4()
+        resolve_launch_alley_1()
     elseif stage == 5 then
         -- Bottom stage objects (add here)
     end

@@ -35,6 +35,12 @@ typedef struct MaskEditorState MaskEditorState;
 #define MAX_PICKER_TABLES    16
 #define UI_SCALE              4    /* Scale factor for all UI text/panels */
 #define EDITOR_SIDEBAR_W    360    /* Sidebar width in screen pixels */
+#define MAX_OBJECT_LINKS      8    /* Max outgoing links per object */
+#define MAX_TABLE_LINKS     128    /* Max total links in a table */
+/* GBC collision map has 2 padding rows above the visible tilemap.
+ * Object/ball coordinates are in game space (16px above tilemap origin).
+ * Subtract this from obj->y to get the tilemap-aligned display position. */
+#define OBJECT_Y_DISPLAY_OFFSET 16
 
 /* Component type IDs */
 typedef enum {
@@ -64,6 +70,25 @@ typedef enum {
     PROP_STRING,
     PROP_COUNT
 } PropertyType;
+
+/* Link relationship types between objects */
+typedef enum {
+    LINK_NONE = 0,
+    LINK_TRIGGERS,       /* A hit fires B's action once */
+    LINK_CHARGES,        /* A hit increments B's counter, fires at threshold */
+    LINK_TOGGLES,        /* A hit toggles B's on/off state */
+    LINK_SEQUENCE,       /* A must be hit before B becomes active (ordered chain) */
+    LINK_COUNT
+} LinkType;
+
+/* A directed link between two objects */
+typedef struct {
+    int source_idx;          /* Index in table.objects[] */
+    int target_idx;          /* Index in table.objects[] */
+    LinkType type;
+    int threshold;           /* For CHARGES: how many hits to activate target */
+    int timer_frames;        /* 0 = permanent, >0 = deactivate after N frames */
+} ObjectLink;
 
 /*=============================================================================
  * Editor Screen (which phase of the editor we're in)
@@ -98,7 +123,7 @@ typedef struct {
  *===========================================================================*/
 typedef struct {
     ComponentType type;
-    uint8_t x, y;               /* World position */
+    uint16_t x, y;              /* World position (uint16_t for combined view) */
     uint8_t x_thresh, y_thresh; /* Bounding box half-widths */
     bool attribute_gated;
     uint8_t attrs[16];          /* Collision attributes (if gated) */
@@ -125,6 +150,8 @@ typedef struct {
     GBCPalette obj_palettes[8];
     EditorObject objects[MAX_EDITOR_OBJECTS];
     int num_objects;
+    ObjectLink links[MAX_TABLE_LINKS];
+    int num_links;
     uint8_t default_scx;
     bool has_flippers;
     uint8_t stage_id;
@@ -177,6 +204,7 @@ typedef struct EditorState {
     bool show_collision_overlay;
     bool show_object_bounds;
     bool show_tile_inspector;
+    bool show_link_overlay;        /* Toggle with I key (Interactions) */
 
     /* Current tool */
     EditorTool current_tool;
@@ -186,6 +214,18 @@ typedef struct EditorState {
     int selected_object;           /* Index into table.objects, -1 = none */
     bool dragging_object;
     int drag_offset_x, drag_offset_y;
+
+    /* Link creation mode */
+    int link_mode_source;          /* Object index when in link-creation mode, -1 = inactive */
+    bool linking;                  /* True = waiting for target click */
+    int selected_link;             /* Index of selected link for editing, -1 = none */
+    int link_type_cycle;           /* Cycles through LinkType on repeated L presses */
+
+    /* Template placement */
+    bool template_picker_open;     /* True = template picker popup visible */
+    int template_cursor;           /* Selected template in picker */
+    bool template_placing;         /* True = ghost preview follows mouse */
+    int template_selected;         /* Which template is being placed */
 
     /* Collision tile hover state */
     int hovered_coll_col;          /* Tile column under mouse (-1 = none) */
@@ -402,5 +442,44 @@ void editor_stop_playtest(EditorState *editor, GameState *state);
 
 /* Hot-reload Lua scripts only (F6 during playtest) */
 void editor_hot_reload(EditorState *editor, GameState *state);
+
+/*=============================================================================
+ * Object Links
+ *===========================================================================*/
+
+/* Add a link between two objects. Returns link index or -1 on failure. */
+int editor_add_link(EditorTable *table, int source, int target, LinkType type);
+
+/* Remove a link by index. Adjusts selected_link if needed. */
+void editor_remove_link(EditorTable *table, int link_idx);
+
+/* Remove all links referencing a given object index. Called when deleting objects. */
+void editor_remove_links_for_object(EditorTable *table, int obj_idx);
+
+/* Fix link indices after an object is removed (shift indices down). */
+void editor_fix_link_indices_after_delete(EditorTable *table, int deleted_idx);
+
+/* Get the display name for a link type */
+const char *editor_link_type_name(LinkType type);
+
+/*=============================================================================
+ * Behavior Templates
+ *===========================================================================*/
+
+#define MAX_TEMPLATE_OBJECTS  8
+#define MAX_TEMPLATE_LINKS    8
+#define NUM_BEHAVIOR_TEMPLATES 5
+
+typedef struct {
+    const char *name;
+    const char *description;
+    int num_objects;
+    struct { ComponentType type; int8_t dx, dy; } objects[MAX_TEMPLATE_OBJECTS];
+    int num_links;
+    struct { int src, dst; LinkType type; int threshold; } links[MAX_TEMPLATE_LINKS];
+} BehaviorTemplate;
+
+/* Get the built-in behavior templates array */
+const BehaviorTemplate *editor_get_templates(void);
 
 #endif /* EDITOR_H */

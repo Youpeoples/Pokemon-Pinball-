@@ -323,4 +323,13 @@ enum PokemonId {
 #define SAVE_SIGNATURE_BYTE1  0x4E  /* 'N' */
 #define SAVE_SIGNATURE_BYTE2  0x54  /* 'T' */
 
+/*=============================================================================
+ * Combined View Constants
+ *===========================================================================*/
+#define COMBINED_TOP_CLIP           8   /* Pixels to clip from top half bottom (overlap row) */
+#define COMBINED_TOP_HEIGHT        (144 - COMBINED_TOP_CLIP)  /* 136 */
+#define COMBINED_VIEW_HEIGHT       (COMBINED_TOP_HEIGHT + 144) /* 280 */
+#define COMBINED_VIEW_SCOREBOARD_H  10  /* Window layer height for scoreboard */
+#define COMBINED_TOTAL_HEIGHT      (COMBINED_VIEW_HEIGHT + COMBINED_VIEW_SCOREBOARD_H)
+
 #endif /* CONSTANTS_H */

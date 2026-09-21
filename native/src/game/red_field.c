@@ -7336,8 +7336,8 @@ static void play_low_time_sfx(GameState *state) {
     if (state->timer_frames != 0) return;
     if (state->timer_minutes != 0) return;
     if (state->timer_seconds == 32) PLAY_SFX(state, "countdown_32sec", 0x07, 0x49);
-    else if (state->timer_seconds == 16) PLAY_SFX(state, "countdown_16sec", 0x07, 0x4A);
-    else if (state->timer_seconds == 5) PLAY_SFX(state, "countdown_5sec", 0x07, 0x4B);
+    else if (state->timer_seconds == 16) PLAY_SFX(state, "countdown_16sec", 0x0A, 0x4A);
+    else if (state->timer_seconds == 5) PLAY_SFX(state, "countdown_5sec", 0x0D, 0x4B);
 }
 
 /*=============================================================================
@@ -7493,7 +7493,7 @@ static void handle_blue_catchem_collision(GameState *state) {
         state->ball_hit_wild_mon = 0;
         state->num_mon_hits = 0;
         state->catch_mode_mon_update_timer = 0;
-        audio_play_sfx(state->audio, 0x00, (uint8_t)(state->current_catchem_mon + 1));
+        audio_play_cry(state->audio, (uint8_t)(state->current_catchem_mon + 1));
         load_wild_mon_collision_mask(state);
         state->special_mode_state = 4;
         break;
@@ -8908,6 +8908,13 @@ static void load_animated_mon_tiles_and_palettes(GameState *state) {
         state->obj_palettes[3].colors[i] = pal[i];     /* palette1 → OBJ palette 3 */
     for (int i = 0; i < 4; i++)
         state->obj_palettes[5].colors[i] = pal[4 + i]; /* palette2 → OBJ palette 5 */
+
+    /* Combined view: also update the per-half palette snapshots so
+     * render_sprites_combined() sees the Pokemon-specific colors. */
+    if (state->combined_view_active) {
+        state->obj_palettes_bottom[3] = state->obj_palettes[3];
+        state->obj_palettes_bottom[5] = state->obj_palettes[5];
+    }
 }
 
 /* Cached billboard tile data for the current catch'em species */
@@ -8975,6 +8982,12 @@ static void load_mon_billboard_palettes(GameState *state) {
         state->bg_palettes[6].colors[i] = pal[i];
     for (int i = 0; i < 4; i++)
         state->bg_palettes[7].colors[i] = pal[4 + i];
+
+    /* Combined view: sync per-half BG palette snapshots */
+    if (state->combined_view_active) {
+        state->bg_palettes_bottom[6] = state->bg_palettes[6];
+        state->bg_palettes_bottom[7] = state->bg_palettes[7];
+    }
 }
 
 /*=============================================================================

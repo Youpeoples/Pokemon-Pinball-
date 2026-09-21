@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* stb_image_write for PNG export */
 #include "stb_image_write.h"
@@ -755,32 +756,37 @@ void mask_editor_render_test_points(MaskEditorState *me, GameState *state,
                                      EditorState *editor, void *sdl_renderer) {
     if (!me->show_test_points) return;
     if (!editor->show_collision_overlay) return;
-    if (editor->hovered_coll_col < 0) return;
 
     SDL_Renderer *r = (SDL_Renderer *)sdl_renderer;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
 
-    /* World position of hovered tile center */
-    float tile_x = (float)(editor->hovered_coll_col * 8 + 4);
-    float tile_y = (float)(editor->hovered_coll_row * 8 + 4);
+    /* World position of mouse cursor (sub-tile precision) */
+    float mouse_wx = (float)editor->mouse_x / editor->zoom + editor->camera_x;
+    float mouse_wy = (float)editor->mouse_y / editor->zoom + editor->camera_y;
 
-    /* Get the mask data for the hovered attribute */
-    uint8_t mask_data[MASK_BYTES];
-    uint8_t attr = editor->hovered_coll_attr;
+    /* Screen center of the ball (follows mouse) */
+    int center_sx = editor->mouse_x;
+    int center_sy = editor->mouse_y;
 
-    if (attr == 0) {
-        /* Passable tile - show test points as all green */
-        memset(mask_data, 0, MASK_BYTES);
-    } else if (attr >= 0xE0) {
-        uint8_t mask_index = (attr - 0xE0) & 0x0F;
-        bool is_right = (attr >= 0xF0);
-        mask_editor_get_flipper_mask(me, state, mask_index, is_right, 0, mask_data);
-    } else {
-        mask_editor_get_mask(me, state, attr, mask_data);
+    /* Draw ball outline circle (always visible, white with transparency) */
+    {
+        float ball_r_px = 4.0f * editor->zoom; /* Ball radius = 4 pixels in world */
+        int segments = 32;
+        uint8_t cr = 0xFF, cg = 0xFF, cb = 0xFF, ca = 0xA0;
+        SDL_SetRenderDrawColor(r, cr, cg, cb, ca);
+        for (int i = 0; i < segments; i++) {
+            float a0 = (float)i / segments * 6.2831853f;
+            float a1 = (float)(i + 1) / segments * 6.2831853f;
+            int x0 = center_sx + (int)(cosf(a0) * ball_r_px);
+            int y0 = center_sy + (int)(sinf(a0) * ball_r_px);
+            int x1 = center_sx + (int)(cosf(a1) * ball_r_px);
+            int y1 = center_sy + (int)(sinf(a1) * ball_r_px);
+            SDL_RenderDrawLine(r, x0, y0, x1, y1);
+        }
     }
 
     /* Draw 16 test points around the mouse cursor position.
-     * Each dot is drawn at the ball test point offset from the tile center. */
+     * Each dot checks the collision mask of the tile it lands on. */
     float dot_radius = 2.0f * editor->zoom;
     if (dot_radius < 1.0f) dot_radius = 1.0f;
 
@@ -788,23 +794,41 @@ void mask_editor_render_test_points(MaskEditorState *me, GameState *state,
         int8_t dx = BallTestPointOffsets[i][0];
         int8_t dy = BallTestPointOffsets[i][1];
 
-        /* World position of test point */
-        float wx = tile_x + (float)dx;
-        float wy = tile_y + (float)dy;
+        /* World position of this test point */
+        float wx = mouse_wx + (float)dx;
+        float wy = mouse_wy + (float)dy;
 
         /* Screen position */
         int sx = (int)((wx - editor->camera_x) * editor->zoom);
         int sy = (int)((wy - editor->camera_y) * editor->zoom);
 
-        /* Check if test point hits solid in mask.
-         * The mask pixel is at (dx+4, dy+4) relative to top-left of tile,
-         * but we need to consider the ball might overlap adjacent tiles.
-         * For the preview, we check within the 8x8 mask of the hovered tile. */
-        int mx = dx + 4;  /* 4 = ball radius offset */
-        int my = dy + 4;
+        /* Which tile does this test point land on? */
+        int tile_col = (int)wx / 8;
+        int tile_row = (int)wy / 8;
+
+        /* Check the mask of that tile for a hit */
         bool hits_solid = false;
-        if (mx >= 0 && mx < MASK_SIZE && my >= 0 && my < MASK_SIZE) {
-            hits_solid = (mask_data[my] & (0x80 >> mx)) != 0;
+        if (tile_col >= 0 && tile_col < 32 && tile_row >= 0 &&
+            tile_row < editor->table.tilemap_rows) {
+            uint8_t attr = editor->table.collision_map[tile_row][tile_col];
+            if (attr != 0) {
+                uint8_t mask_data[MASK_BYTES];
+                if (attr >= 0xE0) {
+                    uint8_t mask_index = (attr - 0xE0) & 0x0F;
+                    bool is_right = (attr >= 0xF0);
+                    mask_editor_get_flipper_mask(me, state, mask_index, is_right, 0, mask_data);
+                } else {
+                    mask_editor_get_mask(me, state, attr, mask_data);
+                }
+                /* Pixel within the 8x8 tile */
+                int px = (int)wx % 8;
+                int py = (int)wy % 8;
+                if (px < 0) px += 8;
+                if (py < 0) py += 8;
+                if (px >= 0 && px < MASK_SIZE && py >= 0 && py < MASK_SIZE) {
+                    hits_solid = (mask_data[py] & (0x80 >> px)) != 0;
+                }
+            }
         }
 
         /* Red = hits solid, green = passable */

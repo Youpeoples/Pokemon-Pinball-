@@ -17,11 +17,12 @@
 struct Renderer {
     SDL_Renderer *sdl_renderer;
     SDL_Texture *framebuffer_tex;
-    uint32_t framebuffer[GBC_SCREEN_WIDTH * GBC_SCREEN_HEIGHT];
-    uint8_t bg_color_indices[GBC_SCREEN_WIDTH * GBC_SCREEN_HEIGHT];
-    bool bg_priority[GBC_SCREEN_WIDTH * GBC_SCREEN_HEIGHT];
+    uint32_t *framebuffer;
+    uint8_t *bg_color_indices;
+    bool *bg_priority;
     int screen_w;
     int screen_h;
+    bool combined_mode;
     VirtualVRAM *vram;
     Platform *platform;
 };
@@ -35,6 +36,18 @@ Renderer *renderer_init(Platform *platform, int screen_w, int screen_h) {
     r->screen_w = screen_w;
     r->screen_h = screen_h;
 
+    int total = screen_w * screen_h;
+    r->framebuffer = calloc(total, sizeof(uint32_t));
+    r->bg_color_indices = calloc(total, sizeof(uint8_t));
+    r->bg_priority = calloc(total, sizeof(bool));
+    if (!r->framebuffer || !r->bg_color_indices || !r->bg_priority) {
+        free(r->framebuffer);
+        free(r->bg_color_indices);
+        free(r->bg_priority);
+        free(r);
+        return NULL;
+    }
+
     r->framebuffer_tex = SDL_CreateTexture(
         r->sdl_renderer,
         SDL_PIXELFORMAT_RGBA8888,
@@ -42,6 +55,9 @@ Renderer *renderer_init(Platform *platform, int screen_w, int screen_h) {
         screen_w, screen_h
     );
     if (!r->framebuffer_tex) {
+        free(r->framebuffer);
+        free(r->bg_color_indices);
+        free(r->bg_priority);
         free(r);
         return NULL;
     }
@@ -54,6 +70,9 @@ void renderer_shutdown(Renderer *renderer) {
     if (renderer->framebuffer_tex) {
         SDL_DestroyTexture(renderer->framebuffer_tex);
     }
+    free(renderer->framebuffer);
+    free(renderer->bg_color_indices);
+    free(renderer->bg_priority);
     free(renderer);
 }
 
@@ -61,14 +80,45 @@ void renderer_set_vram(Renderer *renderer, VirtualVRAM *vram) {
     if (renderer) renderer->vram = vram;
 }
 
+void renderer_set_combined_mode(Renderer *r, bool enabled) {
+    if (r->combined_mode == enabled) return;
+    r->combined_mode = enabled;
+
+    int new_h = enabled ? COMBINED_VIEW_HEIGHT : GBC_SCREEN_HEIGHT;
+
+    /* Recreate SDL texture at new dimensions */
+    if (r->framebuffer_tex) {
+        SDL_DestroyTexture(r->framebuffer_tex);
+    }
+    r->framebuffer_tex = SDL_CreateTexture(
+        r->sdl_renderer,
+        SDL_PIXELFORMAT_RGBA8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        r->screen_w, new_h
+    );
+
+    /* Reallocate framebuffer arrays */
+    int total = r->screen_w * new_h;
+    free(r->framebuffer);
+    free(r->bg_color_indices);
+    free(r->bg_priority);
+    r->framebuffer = calloc(total, sizeof(uint32_t));
+    r->bg_color_indices = calloc(total, sizeof(uint8_t));
+    r->bg_priority = calloc(total, sizeof(bool));
+
+    r->screen_h = new_h;
+}
+
 void renderer_begin_frame(Renderer *renderer) {
-    /* Clear framebuffer to white (GBC default) */
-    for (int i = 0; i < renderer->screen_w * renderer->screen_h; i++) {
-        renderer->framebuffer[i] = 0xFFFFFFFF;
+    int total = renderer->screen_w * renderer->screen_h;
+    /* Combined mode: clear to black (border area). Classic: white (GBC default). */
+    uint32_t clear_color = renderer->combined_mode ? 0x000000FF : 0xFFFFFFFF;
+    for (int i = 0; i < total; i++) {
+        renderer->framebuffer[i] = clear_color;
     }
     /* Clear BG priority tracking arrays */
-    memset(renderer->bg_color_indices, 0, sizeof(renderer->bg_color_indices));
-    memset(renderer->bg_priority, 0, sizeof(renderer->bg_priority));
+    memset(renderer->bg_color_indices, 0, total * sizeof(uint8_t));
+    memset(renderer->bg_priority, 0, total * sizeof(bool));
 }
 
 /*=============================================================================
@@ -464,6 +514,300 @@ static void render_sprites(Renderer *r, GameState *state) {
     }
 }
 
+/*=============================================================================
+ * Combined View Rendering
+ *
+ * When combined_mode is active, these functions render the full table
+ * (top + bottom halves) into a 160x288 framebuffer.
+ *===========================================================================*/
+
+static bool is_bonus_stage(uint8_t stage) {
+    return stage >= FIRST_BONUS_STAGE;
+}
+
+/* Render one half of the table BG into the combined framebuffer.
+ * Always uses signed tile addressing (pinball LCDC $67, bit 4=0).
+ * height: number of rows to render (may be < 144 to clip overlap). */
+static void render_bg_half(Renderer *r, VirtualVRAM *vram, GBCPalette *pals,
+                           uint8_t scx, int y_offset, int height) {
+    uint8_t (*tilemap)[VRAM_MAP_SIZE] = vram->bg_map;
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < GBC_SCREEN_WIDTH; x++) {
+            uint8_t map_x = (uint8_t)(x + scx);
+            uint8_t map_y = (uint8_t)y;
+
+            int tx = map_x >> 3;
+            int ty = map_y >> 3;
+            int map_idx = ty * 32 + tx;
+
+            uint8_t tile_num = tilemap[0][map_idx];
+            uint8_t attrs = tilemap[1][map_idx];
+
+            uint8_t pal_num  = attrs & 0x07;
+            uint8_t tile_bank = (attrs >> 3) & 1;
+            bool h_flip = (attrs >> 5) & 1;
+            bool v_flip = (attrs >> 6) & 1;
+
+            int px = map_x & 7;
+            int py = map_y & 7;
+            if (h_flip) px = 7 - px;
+            if (v_flip) py = 7 - py;
+
+            /* Signed addressing: (int8_t)tile_num * 16 + 0x1000 */
+            int tile_offset = (int)(int8_t)tile_num * 16 + 0x1000;
+            if (tile_offset < 0 || tile_offset + 15 >= VRAM_TILE_DATA_SIZE) continue;
+
+            const uint8_t *row_data = &vram->tile_data[tile_bank][tile_offset + py * 2];
+            uint8_t lo_byte = row_data[0];
+            uint8_t hi_byte = row_data[1];
+
+            int bit = 7 - px;
+            uint8_t color_idx = ((lo_byte >> bit) & 1) | (((hi_byte >> bit) & 1) << 1);
+
+            int fb_idx = (y + y_offset) * r->screen_w + x;
+            r->bg_color_indices[fb_idx] = color_idx;
+            r->bg_priority[fb_idx] = (attrs & 0x80) && (color_idx != 0);
+
+            uint16_t rgb555 = pals[pal_num].colors[color_idx];
+            r->framebuffer[fb_idx] = rgb555_to_rgba(rgb555);
+        }
+    }
+}
+
+static void render_bg_combined(Renderer *r, GameState *state) {
+    uint8_t scx = state->hram.scx;
+    /* Top half: clip bottom row (overlap with bottom half) */
+    render_bg_half(r, state->vram_top, state->bg_palettes_top, scx, 0, COMBINED_TOP_HEIGHT);
+    /* Bottom half: starts right after clipped top */
+    render_bg_half(r, state->vram_bottom, state->bg_palettes_bottom, scx, COMBINED_TOP_HEIGHT, GBC_SCREEN_HEIGHT);
+}
+
+/* Render the window layer (scoreboard) in the bottom half of combined view.
+ * Uses vram_bottom for tilemap data and bg_palettes_bottom for colors. */
+static void render_window_combined(Renderer *r, GameState *state) {
+    VirtualVRAM *vram = state->vram_bottom;
+    if (!vram) return;
+
+    if (!(state->hram.lcdc & 0x20)) return;
+    if (!(state->hram.lcdc & 0x01)) return;
+
+    int wy = (int)state->hram.wy;
+    int wx = (int)state->hram.wx - 7;
+
+    /* Bottom half starts after clipped top half in the combined framebuffer */
+    int combined_wy = wy + COMBINED_TOP_HEIGHT;
+    if (combined_wy >= r->screen_h || wx >= r->screen_w) return;
+
+    /* Determine effective LCDC for window addressing.
+     * Pinball STAT routine 1 toggles bit 4 for the window area. */
+    uint8_t effective_lcdc = state->hram.lcdc;
+    if (state->hram.stat_intr_routine == 1 && wy > (int)state->hram.lyc) {
+        effective_lcdc = (effective_lcdc ^ 0x10) & state->hram.lcdc_mask;
+    }
+
+    bool unsigned_addressing = (effective_lcdc & 0x10) != 0;
+    uint8_t (*tilemap)[VRAM_MAP_SIZE] = (effective_lcdc & 0x40)
+        ? vram->win_map : vram->bg_map;
+
+    GBCPalette *pals = state->bg_palettes_bottom;
+
+    for (int y = (combined_wy < 0 ? 0 : combined_wy); y < r->screen_h; y++) {
+        for (int x = (wx < 0 ? 0 : wx); x < r->screen_w; x++) {
+            int win_y = y - combined_wy;
+            int win_x = x - wx;
+            if (win_x < 0) continue;
+
+            int tx = win_x >> 3;
+            int ty = win_y >> 3;
+            if (tx >= 32 || ty >= 32) continue;
+            int map_idx = ty * 32 + tx;
+
+            uint8_t tile_num = tilemap[0][map_idx];
+            uint8_t attrs = tilemap[1][map_idx];
+
+            uint8_t pal_num   = attrs & 0x07;
+            uint8_t tile_bank = (attrs >> 3) & 1;
+            bool h_flip = (attrs >> 5) & 1;
+            bool v_flip = (attrs >> 6) & 1;
+
+            int px = win_x & 7;
+            int py = win_y & 7;
+            if (h_flip) px = 7 - px;
+            if (v_flip) py = 7 - py;
+
+            int tile_offset;
+            if (unsigned_addressing) {
+                tile_offset = (int)tile_num * 16;
+            } else {
+                tile_offset = (int)(int8_t)tile_num * 16 + 0x1000;
+            }
+
+            if (tile_offset < 0 || tile_offset + 15 >= VRAM_TILE_DATA_SIZE) continue;
+
+            const uint8_t *row_data = &vram->tile_data[tile_bank][tile_offset + py * 2];
+            uint8_t lo_byte = row_data[0];
+            uint8_t hi_byte = row_data[1];
+
+            int bit = 7 - px;
+            uint8_t color_idx = ((lo_byte >> bit) & 1) | (((hi_byte >> bit) & 1) << 1);
+
+            int fb_idx = y * r->screen_w + x;
+            r->bg_color_indices[fb_idx] = color_idx;
+            r->bg_priority[fb_idx] = (attrs & 0x80) && (color_idx != 0);
+
+            uint16_t rgb555 = pals[pal_num].colors[color_idx];
+            r->framebuffer[fb_idx] = rgb555_to_rgba(rgb555);
+        }
+    }
+}
+
+/* Render a sprite buffer into the combined framebuffer at a given Y offset.
+ * Uses the specified VRAM for tile data and palettes for colors. */
+static void render_sprite_buffer(Renderer *r, OAMEntry *sprites, int count,
+                                 VirtualVRAM *vram, GBCPalette *obj_pals,
+                                 int sprite_height, int y_offset) {
+    for (int i = count - 1; i >= 0; i--) {
+        OAMEntry *oam = &sprites[i];
+        if (oam->y == 0 || oam->x == 0) continue;
+
+        int screen_y = (int)oam->y - 16 + y_offset;
+        int screen_x = (int)oam->x - 8;
+
+        uint8_t pal_num   = oam->attr & OAM_PALETTE;
+        uint8_t tile_bank = (oam->attr & OAM_TILE_BANK) ? 1 : 0;
+        bool h_flip       = (oam->attr & OAM_X_FLIP) != 0;
+        bool v_flip       = (oam->attr & OAM_Y_FLIP) != 0;
+
+        uint8_t base_tile = oam->tile;
+        if (sprite_height == 16) base_tile &= 0xFE;
+
+        for (int row = 0; row < sprite_height; row++) {
+            int draw_y = screen_y + row;
+            if (draw_y < 0 || draw_y >= r->screen_h) continue;
+
+            int src_row = v_flip ? (sprite_height - 1 - row) : row;
+
+            uint8_t tile_num;
+            int tile_row;
+            if (sprite_height == 16) {
+                if (src_row < 8) {
+                    tile_num = base_tile;
+                    tile_row = src_row;
+                } else {
+                    tile_num = base_tile | 0x01;
+                    tile_row = src_row - 8;
+                }
+            } else {
+                tile_num = base_tile;
+                tile_row = src_row;
+            }
+
+            int tile_offset = (int)tile_num * 16;
+            if (tile_offset + tile_row * 2 + 1 >= VRAM_TILE_DATA_SIZE) continue;
+
+            const uint8_t *row_data = &vram->tile_data[tile_bank][tile_offset + tile_row * 2];
+            uint8_t lo_byte = row_data[0];
+            uint8_t hi_byte = row_data[1];
+
+            for (int col = 0; col < 8; col++) {
+                int draw_x = screen_x + col;
+                if (draw_x < 0 || draw_x >= GBC_SCREEN_WIDTH) continue;
+
+                int bit = h_flip ? col : (7 - col);
+                uint8_t color_idx = ((lo_byte >> bit) & 1) | (((hi_byte >> bit) & 1) << 1);
+
+                if (color_idx == 0) continue;
+
+                int fb_idx = draw_y * r->screen_w + draw_x;
+                if (r->bg_priority[fb_idx]) continue;
+                if ((oam->attr & OAM_PRIORITY) && r->bg_color_indices[fb_idx] != 0) continue;
+
+                uint16_t rgb555 = obj_pals[pal_num].colors[color_idx];
+                r->framebuffer[fb_idx] = rgb555_to_rgba(rgb555);
+            }
+        }
+    }
+}
+
+/* Render sprites for both halves into the combined framebuffer. */
+static void render_sprites_combined(Renderer *r, GameState *state) {
+    if (!(state->hram.lcdc & 0x02)) return;
+    int sprite_height = (state->hram.lcdc & 0x04) ? 16 : 8;
+
+    /* Determine which buffer is top and which is bottom */
+    OAMEntry *top_sprites, *bottom_sprites;
+    int top_count, bottom_count;
+    VirtualVRAM *top_vram, *bottom_vram;
+    GBCPalette *top_pals, *bottom_pals;
+
+    if (state->combined_active_half == 0) {
+        /* Active = top, other = bottom */
+        top_sprites = state->sprite_buffer;
+        top_count = GBC_OAM_ENTRIES;
+        top_vram = state->vram_top;
+        top_pals = state->obj_palettes_top;
+        bottom_sprites = state->sprite_buffer_other;
+        bottom_count = GBC_OAM_ENTRIES;
+        bottom_vram = state->vram_bottom;
+        bottom_pals = state->obj_palettes_bottom;
+    } else {
+        /* Active = bottom, other = top */
+        top_sprites = state->sprite_buffer_other;
+        top_count = GBC_OAM_ENTRIES;
+        top_vram = state->vram_top;
+        top_pals = state->obj_palettes_top;
+        bottom_sprites = state->sprite_buffer;
+        bottom_count = GBC_OAM_ENTRIES;
+        bottom_vram = state->vram_bottom;
+        bottom_pals = state->obj_palettes_bottom;
+    }
+
+    /* Render top half sprites (Y offset 0) */
+    if (top_vram)
+        render_sprite_buffer(r, top_sprites, top_count, top_vram, top_pals,
+                             sprite_height, 0);
+    /* Render bottom half sprites (Y offset = COMBINED_TOP_HEIGHT) */
+    if (bottom_vram)
+        render_sprite_buffer(r, bottom_sprites, bottom_count, bottom_vram, bottom_pals,
+                             sprite_height, COMBINED_TOP_HEIGHT);
+}
+
+/* Render the standard 160x144 view centered in the combined framebuffer.
+ * Used for bonus stages and non-pinball screens when combined mode is on. */
+static void render_game_centered_in_combined(Renderer *r, GameState *state) {
+    int y_offset = (r->screen_h - GBC_SCREEN_HEIGHT) / 2;
+
+    /* Shift framebuffer pointers to the centered position.
+     * The standard render functions write to indices 0..(160*144-1),
+     * so shifting the base pointer places output at the correct offset. */
+    uint32_t *orig_fb = r->framebuffer;
+    uint8_t *orig_ci = r->bg_color_indices;
+    bool *orig_bp = r->bg_priority;
+    int orig_h = r->screen_h;
+
+    r->framebuffer = orig_fb + y_offset * r->screen_w;
+    r->bg_color_indices = orig_ci + y_offset * r->screen_w;
+    r->bg_priority = orig_bp + y_offset * r->screen_w;
+    r->screen_h = GBC_SCREEN_HEIGHT;
+
+    /* Clear the centered region to white (GBC default) */
+    int area = GBC_SCREEN_WIDTH * GBC_SCREEN_HEIGHT;
+    for (int i = 0; i < area; i++) r->framebuffer[i] = 0xFFFFFFFF;
+    memset(r->bg_color_indices, 0, area * sizeof(uint8_t));
+    memset(r->bg_priority, 0, area * sizeof(bool));
+
+    render_bg_tilemap(r, state);
+    render_window_tilemap(r, state);
+    render_sprites(r, state);
+
+    /* Restore original pointers and dimensions */
+    r->framebuffer = orig_fb;
+    r->bg_color_indices = orig_ci;
+    r->bg_priority = orig_bp;
+    r->screen_h = orig_h;
+}
+
 /*
  * Simple color per screen so you can see state changes visually.
  * Each screen gets a distinct background color.
@@ -522,12 +866,23 @@ void renderer_draw_game(Renderer *renderer, GameState *state) {
             memcpy(state->obj_palettes, state->fade_obj_palettes, sizeof(saved_obj));
         }
 
-        /* Render BG tilemap from VRAM */
-        render_bg_tilemap(renderer, state);
-        /* Render window layer on top of BG */
-        render_window_tilemap(renderer, state);
-        /* Render OAM sprites on top of BG/window */
-        render_sprites(renderer, state);
+        if (renderer->combined_mode) {
+            if (state->current_screen == SCREEN_PINBALL_GAME &&
+                !is_bonus_stage(state->current_stage)) {
+                /* Combined view: render both halves of the field */
+                render_bg_combined(renderer, state);
+                render_window_combined(renderer, state);
+                render_sprites_combined(renderer, state);
+            } else {
+                /* Bonus stage or non-pinball screen: render centered */
+                render_game_centered_in_combined(renderer, state);
+            }
+        } else {
+            /* Classic rendering path */
+            render_bg_tilemap(renderer, state);
+            render_window_tilemap(renderer, state);
+            render_sprites(renderer, state);
+        }
 
         /* Restore original palettes after rendering */
         if (fading) {

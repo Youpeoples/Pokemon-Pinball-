@@ -6,6 +6,90 @@ local function draw_top_sprites()
     local scx = pinball.get_hram("scx")
     local scy = pinball.get_hram("scy")
 
+    -- Bumper #1 at world (58, 86)
+    pinball.load_sprite_data("bumper_idle", 0, 86 - scy, 58 - scx)
+
+    -- Bumper #2 at world (79, 69)
+    pinball.load_sprite_data("bumper_idle", 0, 69 - scy, 79 - scx)
+
+    -- Bumper #3 at world (100, 86)
+    pinball.load_sprite_data("bumper_idle", 0, 86 - scy, 100 - scx)
+
+    -- Spinner #1 at world (146, 106)
+    pinball.load_sprite_data("spinner_idle", 0, 106 - scy, 146 - scx)
+
+    -- Board Trigger #1 at world (21, 67)
+    pinball.load_sprite_data("board_trigger_idle", 0, 67 - scy, 21 - scx)
+
+    -- Board Trigger #2 at world (139, 67)
+    pinball.load_sprite_data("board_trigger_idle", 0, 67 - scy, 139 - scx)
+
+    -- Board Trigger #3 at world (16, 140)
+    pinball.load_sprite_data("board_trigger_idle", 0, 140 - scy, 16 - scx)
+
+    -- Board Trigger #4 at world (143, 140)
+    pinball.load_sprite_data("board_trigger_idle", 0, 140 - scy, 143 - scx)
+
+    -- Field Creature #1 at world (44, 120)
+    pinball.load_sprite_data("field_creature_idle", 0, 120 - scy, 44 - scx)
+
+    -- Field Creature #2 at world (115, 120)
+    pinball.load_sprite_data("field_creature_idle", 0, 120 - scy, 115 - scx)
+
+    -- Ball Upgrade #1 at world (55, 52)
+    pinball.load_sprite_data("ball_upgrade_idle", 0, 52 - scy, 55 - scx)
+
+    -- Ball Upgrade #2 at world (79, 47)
+    pinball.load_sprite_data("ball_upgrade_idle", 0, 47 - scy, 79 - scx)
+
+    -- Ball Upgrade #3 at world (103, 53)
+    pinball.load_sprite_data("ball_upgrade_idle", 0, 53 - scy, 103 - scx)
+
+    -- Wild Pokemon #1 at world (80, 208)
+    pinball.load_sprite_data("wild_pokemon_idle", 0, 208 - scy, 80 - scx)
+
+    -- Field Creature #3 at world (34, 206)
+    pinball.load_sprite_data("field_creature_idle", 0, 206 - scy, 34 - scx)
+
+    -- Field Creature #4 at world (125, 205)
+    pinball.load_sprite_data("field_creature_idle", 0, 205 - scy, 125 - scx)
+
+    -- Railing #1 at world (44, 176)
+    pinball.load_sprite_data("railing_idle", 0, 176 - scy, 44 - scx)
+
+    -- Railing #2 at world (116, 176)
+    pinball.load_sprite_data("railing_idle", 0, 176 - scy, 116 - scx)
+
+    -- Slot Machine #1 at world (80, 166)
+    pinball.load_sprite_data("slot_machine_idle", 0, 166 - scy, 80 - scx)
+
+    -- Bumper #4 at world (48, 246)
+    pinball.load_sprite_data("bumper_idle", 0, 246 - scy, 48 - scx)
+
+    -- Bumper #5 at world (111, 246)
+    pinball.load_sprite_data("bumper_idle", 0, 246 - scy, 111 - scx)
+
+    -- Pikachu Saver #1 at world (14, 268)
+    pinball.load_sprite_data("pikachu_saver_idle", 0, 268 - scy, 14 - scx)
+
+    -- Pikachu Saver #2 at world (146, 268)
+    pinball.load_sprite_data("pikachu_saver_idle", 0, 268 - scy, 146 - scx)
+
+    -- CAVE Light #1 at world (14, 245)
+    pinball.load_sprite_data("cave_light_idle", 0, 245 - scy, 14 - scx)
+
+    -- CAVE Light #2 at world (30, 245)
+    pinball.load_sprite_data("cave_light_idle", 0, 245 - scy, 30 - scx)
+
+    -- CAVE Light #3 at world (130, 245)
+    pinball.load_sprite_data("cave_light_idle", 0, 245 - scy, 130 - scx)
+
+    -- CAVE Light #4 at world (146, 245)
+    pinball.load_sprite_data("cave_light_idle", 0, 245 - scy, 146 - scx)
+
+    -- Launch Alley #1 at world (168, 296)
+    pinball.load_sprite_data("launch_alley_idle", 0, 296 - scy, 168 - scx)
+
     -- Ball
     local bx = (pinball.get_ball_x() >> 8) - scx
     local by = (pinball.get_ball_y() >> 8) - scy

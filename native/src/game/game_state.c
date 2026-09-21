@@ -9,6 +9,7 @@
 #include "game/config_data.h"
 #include "game/editor.h"
 #include "game/rng.h"
+#include "renderer/vram.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,6 +20,10 @@ GameState *game_state_init(void) {
     /* Create config with hardcoded defaults (JSON loading happens later in main.c) */
     state->config = config_data_create();
 
+    /* Allocate combined view VRAM snapshots */
+    state->vram_top = vram_create();
+    state->vram_bottom = vram_create();
+
     game_state_reset(state);
     return state;
 }
@@ -26,6 +31,9 @@ GameState *game_state_init(void) {
 void game_state_reset(GameState *state) {
     /* Save native-only pointers that must survive memset (L11) */
     VirtualVRAM *saved_vram = state->vram;
+    VirtualVRAM *saved_vram_top = state->vram_top;
+    VirtualVRAM *saved_vram_bottom = state->vram_bottom;
+    bool saved_combined_view = state->combined_view_active;
     AudioEngine *saved_audio = state->audio;
     ConfigData *saved_config = state->config;
     ScriptEngine *saved_script_engine = state->script_engine;
@@ -43,6 +51,9 @@ void game_state_reset(GameState *state) {
 
     /* Restore native-only pointers */
     state->vram = saved_vram;
+    state->vram_top = saved_vram_top;
+    state->vram_bottom = saved_vram_bottom;
+    state->combined_view_active = saved_combined_view;
     state->audio = saved_audio;
     state->config = saved_config;
     state->script_engine = saved_script_engine;
@@ -180,6 +191,8 @@ void game_state_free(GameState *state) {
     if (state) {
         config_data_free(state->config);
         editor_free(state->editor_state);
+        vram_free(state->vram_top);
+        vram_free(state->vram_bottom);
         free(state->vwf_font_gfx);
         free(state->slot_force_field_data);
         free(state);

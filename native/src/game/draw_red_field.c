@@ -332,6 +332,8 @@ static void draw_ditto(GameState *state) {
  *===========================================================================*/
 void draw_timer(GameState *state, uint8_t x, uint8_t y) {
     if (!state->timer_active) return;
+    /* In combined view, only draw timer on the top half */
+    if (state->combined_view_active && STAGE_HAS_FLIPPERS(state->current_stage)) return;
 
     /* Minutes (lower nibble of BCD timer_minutes) */
     uint8_t m = state->timer_minutes & 0x0F;
